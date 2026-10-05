@@ -16,7 +16,12 @@ let routes = [];      // 按线路名合并后的 23 条：{name, dirs:[Line,…
 let current = null;   // 当前线路名
 let detail = [];      // 当前线路各方向的 {dir, stops, rt}
 let sel = null;       // 选中的站点 {lineId, order}；刷新后要恢复高亮
+let night = null;     // 本线夜班服务：{stops:Set, from, to}；无夜班则 null
 let timer = null;
+
+// "17:47" → 1067（当日分钟数）
+const hm = (s) => { const [h, m] = s.split(':'); return +h * 60 + +m; };
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 
 async function api(path) {
   const r = await fetch(path);
@@ -70,12 +75,17 @@ function stateOf(rt) {
   return ['idle', rt.desc || `状态 ${rt.state}`];
 }
 
-/* ── 侧栏：46 个方向按线路名合并成 23 条 ───────────────────────────── */
+/* ── 侧栏：按线路名合并方向（46 个方向 → 22 条）────────────────────── */
+// 「6路夜班」并入「6」—— 夜班是同一条线的夜间服务，站表是日班的子集
+const baseName = (n) => n.replace(/路?夜班$/, '');
+
 function groupByName(ls) {
   const m = new Map();
   for (const l of ls) {
-    if (!m.has(l.name)) m.set(l.name, { name: l.name, dirs: [] });
-    m.get(l.name).dirs.push(l);
+    const base = baseName(l.name);
+    if (!m.has(base)) m.set(base, { name: base, dirs: [], night: [] });
+    const g = m.get(base);
+    (l.name === base ? g.dirs : g.night).push(l);
   }
   return [...m.values()];
 }
@@ -121,7 +131,8 @@ function busIcon() {
 
 // 一轨 = 一个方向，按行车顺序从左到右排，箭头一律在右端。
 // 两轨各带各的站表 —— 23 条线里只有 1 条两方向严格互逆，合并会藏站造站。
-function railEl(it) {
+// nightOn 时，夜班不停的站标红。
+function railEl(it, nightOn) {
   const { dir, stops, rt } = it;
   const box = el('div', 'railbox');
 
@@ -130,6 +141,7 @@ function railEl(it) {
   head.append(el('span', 'dir', `${dir.start} → ${dir.end}`));
   head.append(el('span', 'st ' + cls, txt));
   head.append(el('span', 'cnt', `${stops.length} 站 · ${(rt.buses || []).length} 辆`));
+  if (nightOn) head.append(el('span', 'legend', '红字 = 夜班不停'));
   box.append(head);
 
   const byOrder = new Map();
@@ -144,7 +156,10 @@ function railEl(it) {
   stops.forEach((s, i) => {
     // 注意别写成 'rstop' + (cond ? ' term' : null) —— 假分支会拼出 "rstopnull"
     const term = i === 0 || i === stops.length - 1;
-    const st = el('div', term ? 'rstop term' : 'rstop');
+    const skip = nightOn && !night.stops.has(s.name);
+    let cls2 = term ? 'rstop term' : 'rstop';
+    if (skip) cls2 += ' skip';
+    const st = el('div', cls2);
     const wrap = el('div', 'rbuswrap');
     for (const b of (byOrder.get(s.order) || [])) {
       const chip = el('span', 'rbus');   // 只是标记，点击冒泡到站点
@@ -155,7 +170,7 @@ function railEl(it) {
     st.append(wrap);
     st.append(el('i', 'dot'));
     const nm = el('span', 'nm', s.name);
-    nm.title = s.name;              // 站名超两行被截时仍能看全
+    nm.title = skip ? `${s.name}（夜班不停）` : s.name;   // 超两行被截时也能看全
     st.append(nm);
     st.tabIndex = 0;
     st.dataset.line = dir.lineId;
@@ -180,7 +195,8 @@ function renderStrip() {
     box.append(el('div', 'note', '这条线路取不到站点数据。'));
     return;
   }
-  detail.forEach((it) => box.append(railEl(it)));
+  const nightOn = !!(night && nowMin() >= night.from && nowMin() <= night.to);
+  detail.forEach((it) => box.append(railEl(it, nightOn)));
 }
 
 /* ── 选中站点 → 各车到该站还有多久 ───────────────────────────────── */
@@ -281,6 +297,20 @@ async function select(name) {
   renderLines($('#q').value);
   $('#strip').textContent = '';
   $('#strip').append(el('div', 'note', '加载中…'));
+
+  // 夜班站表与时段是静态的，选线路时取一次；服务端对 /lines/{id} 有 1h 缓存
+  night = null;
+  if (g && g.night.length) {
+    try {
+      const rs = await Promise.all(g.night.map((d) => api(`/lines/${encodeURIComponent(d.lineId)}`)));
+      night = {
+        stops: new Set(rs.flatMap((r) => (r.stops || []).map((s) => s.name))),
+        from: Math.min(...g.night.map((d) => hm(d.firstTime))),
+        to: Math.max(...g.night.map((d) => hm(d.lastTime))),
+      };
+    } catch { /* 夜班取不到就退化成不标红 */ }
+  }
+
   await refresh();
 }
 

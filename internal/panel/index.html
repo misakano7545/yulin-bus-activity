@@ -95,6 +95,7 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .railhead .st.idle { background:var(--warn-soft); color:var(--warn); }
 .railhead .st.off { background:var(--bad-soft); color:var(--bad); }
 .railhead .cnt { color:var(--ink-3); font-size:12px; margin-left:auto; font-family:var(--mono); }
+.railhead .legend { font-size:11.5px; color:var(--bad); }
 
 .railscroll { overflow-x:auto; padding:14px 16px 6px; }
 .rail { display:flex; align-items:flex-start; min-width:min-content; }
@@ -112,6 +113,10 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
   height:2.7em; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   text-wrap:balance; }
 .rstop.term .nm { font-weight:650; color:var(--ink); }
+/* 夜班营运时段：夜班不停的站标红。放最后并把 .term/.on 都列进选择器，
+   否则 .rstop.term .nm 同优先级且在后，会把首站的红字盖掉。 */
+.rstop.skip .dot { border-color:var(--bad); }
+.rstop.skip .nm, .rstop.skip.term .nm, .rstop.skip.on .nm { color:var(--bad); }
 /* 车辆图标区固定高度，各站圆点才落在同一条 y 上 */
 .rbuswrap { height:40px; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; }
 .railcap { flex:0 0 auto; width:12px; height:40px; position:relative; }
