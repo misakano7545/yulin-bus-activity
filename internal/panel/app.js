@@ -15,6 +15,7 @@ const REFRESH_MS = 10000;
 let routes = [];      // 按线路名合并后的 23 条：{name, dirs:[Line,…]}
 let current = null;   // 当前线路名
 let detail = [];      // 当前线路各方向的 {dir, stops, rt}
+let sel = null;       // 选中的站点 {lineId, order}；刷新后要恢复高亮
 let timer = null;
 
 async function api(path) {
@@ -56,16 +57,8 @@ function initTheme() {
   });
 }
 
-// 站序 → 正式站名；站序不在该方向站点表里（上游给 0 或越界）时回退成站序
-const nameOf = (stops, order) =>
-  (stops.find((s) => s.order === order) || {}).name || `第 ${order} 站`;
-
-// 秒 → 「15分44秒」；到点或已过站返回「—」
-function dur(sec) {
-  if (!sec || sec <= 0) return '—';
-  const m = Math.floor(sec / 60), s = sec % 60;
-  return m ? `${m}分${s}秒` : `${s}秒`;
-}
+// 到站倒计时：按分钟说，一分钟内说「即将到站」，已过站直说
+const mins = (sec) => (sec > 0 ? (sec <= 60 ? '即将到站' : `约 ${Math.round(sec / 60)} 分钟`) : '已过站');
 
 // 运营状态：上游 state 0 正常 / -1 等待发车 / -2 临时停运 / -3 末班已过
 function stateOf(rt) {
@@ -126,14 +119,14 @@ function busIcon() {
   return svg;
 }
 
-// 一轨 = 一个方向。reversed 时倒序渲染，好让两轨共用同一条空间轴。
-function railEl(it, reversed) {
+// 一轨 = 一个方向，按行车顺序从左到右排，箭头一律在右端。
+// 两轨各带各的站表 —— 23 条线里只有 1 条两方向严格互逆，合并会藏站造站。
+function railEl(it) {
   const { dir, stops, rt } = it;
   const box = el('div', 'railbox');
 
   const head = el('div', 'railhead');
   const [cls, txt] = stateOf(rt);
-  head.append(el('span', 'arrow', reversed ? '←' : '→'));
   head.append(el('span', 'dir', `${dir.start} → ${dir.end}`));
   head.append(el('span', 'st ' + cls, txt));
   head.append(el('span', 'cnt', `${stops.length} 站 · ${(rt.buses || []).length} 辆`));
@@ -147,31 +140,33 @@ function railEl(it, reversed) {
 
   const scroll = el('div', 'railscroll');
   const rail = el('div', 'rail');
-  // 箭头只在行车终点一侧，指向行进方向（两轨各一个，不是两端各一个）
-  if (reversed) rail.append(el('i', 'railcap l'));
 
-  const list = reversed ? [...stops].reverse() : stops;
-  list.forEach((s, i) => {
+  stops.forEach((s, i) => {
     // 注意别写成 'rstop' + (cond ? ' term' : null) —— 假分支会拼出 "rstopnull"
-    const term = i === 0 || i === list.length - 1;
+    const term = i === 0 || i === stops.length - 1;
     const st = el('div', term ? 'rstop term' : 'rstop');
     const wrap = el('div', 'rbuswrap');
     for (const b of (byOrder.get(s.order) || [])) {
-      const btn = el('button', 'rbus');
-      btn.type = 'button';
-      btn.append(busIcon(), el('span', null, b.fleetNo));
-      btn.title = b.arriveAt ? `${b.fleetNo} · ${dur(b.eta)} · ${b.arriveAt} 到终点` : `${b.fleetNo} · 到终点 ${dur(b.eta)}`;
-      btn.addEventListener('click', () => showBus(it, b, btn));
-      wrap.append(btn);
+      const chip = el('span', 'rbus');   // 只是标记，点击冒泡到站点
+      chip.append(busIcon(), el('span', null, b.fleetNo));
+      chip.title = `${b.fleetNo} · 当前第 ${s.order} 站`;
+      wrap.append(chip);
     }
     st.append(wrap);
     st.append(el('i', 'dot'));
     const nm = el('span', 'nm', s.name);
     nm.title = s.name;              // 站名超两行被截时仍能看全
     st.append(nm);
+    st.tabIndex = 0;
+    st.dataset.line = dir.lineId;
+    st.dataset.order = s.order;
+    st.addEventListener('click', () => selectStop(it, s, st));
+    st.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectStop(it, s, st); }
+    });
     rail.append(st);
   });
-  if (!reversed) rail.append(el('i', 'railcap r'));
+  rail.append(el('i', 'railcap r'));
 
   scroll.append(rail);
   box.append(scroll);
@@ -185,33 +180,51 @@ function renderStrip() {
     box.append(el('div', 'note', '这条线路取不到站点数据。'));
     return;
   }
-  // 第 1 个方向定轴；其余方向倒序渲染，端点因此左右对齐
-  detail.forEach((it, i) => box.append(railEl(it, i > 0)));
+  detail.forEach((it) => box.append(railEl(it)));
 }
 
-/* ── 车辆信息 ─────────────────────────────────────────────────────── */
-function showBus(it, b, btn) {
-  document.querySelectorAll('.rbus.on').forEach((x) => x.classList.remove('on'));
-  btn.classList.add('on');
+/* ── 选中站点 → 各车到该站还有多久 ───────────────────────────────── */
+async function selectStop(it, s, node, quiet) {
+  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
+  node.classList.add('on');
+  sel = { lineId: it.dir.lineId, order: s.order };
 
   const box = $('#businfo');
-  box.textContent = '';
-  const h = el('div', 'h');
-  h.append(el('span', 'fno', b.fleetNo));
-  if (b.rawId && !/^\d+$/.test(b.rawId)) h.append(el('span', 'pl', b.rawId));
-  if (b.confidence === 'low') h.append(el('span', 'pl', '车牌未识别'));
-  h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
-  box.append(h);
-
-  const row = (k, v) => {
-    const r = el('div', 'row');
-    r.append(el('span', null, k), el('b', null, v));
-    box.append(r);
-  };
-  row('当前', nameOf(it.stops, b.order));
-  row('目标', nameOf(it.stops, b.targetOrder));
-  row('预计', b.arriveAt ? `${dur(b.eta)} · ${b.arriveAt}` : dur(b.eta));
+  if (!quiet) {
+    box.textContent = '';
+    box.append(el('div', 'note', '查询中…'));
+  }
   $('#infosect').hidden = false;
+
+  try {
+    // targetOrder 让上游把 ETA 算到该站，而不是终点站
+    const rt = await api(`/lines/${encodeURIComponent(it.dir.lineId)}/realtime?targetOrder=${s.order}`);
+    box.textContent = '';
+
+    const h = el('div', 'h');
+    h.append(el('span', 'stn', s.name));
+    h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
+    box.append(h);
+
+    const buses = (rt.buses || []).slice().sort((a, b) => {
+      const av = a.eta > 0 ? a.eta : Infinity, bv = b.eta > 0 ? b.eta : Infinity;
+      return av - bv;
+    });
+    if (!buses.length) {
+      box.append(el('div', 'note', '该方向当前没有在线车辆。'));
+      return;
+    }
+    for (const b of buses) {
+      const r = el('div', 'row');
+      r.append(el('span', 'fno', b.fleetNo));
+      r.append(el('span', 'eta', mins(b.eta)));
+      if (b.eta > 0 && b.arriveAt) r.append(el('span', 'at', b.arriveAt));
+      box.append(r);
+    }
+  } catch (e) {
+    box.textContent = '';
+    box.append(el('div', 'note bad', `取到站数据失败：${e.message}`));
+  }
 }
 
 /* ── 刷新 ─────────────────────────────────────────────────────────── */
@@ -239,6 +252,16 @@ async function refresh() {
 
     renderStrip();
     renderLines($('#q').value);
+
+    // 刷新重建了轨道，恢复选中高亮并刷新到站倒计时
+    if (sel) {
+      const node = document.querySelector(
+        `.rstop[data-line="${sel.lineId}"][data-order="${sel.order}"]`);
+      const it = detail.find((x) => x.dir.lineId === sel.lineId);
+      const s = it && it.stops.find((x) => x.order === sel.order);
+      if (node && s) await selectStop(it, s, node, true);
+      else sel = null;
+    }
   } catch (e) {
     $('#state').className = 'pill off';
     $('#statetxt').textContent = '获取失败';
@@ -250,6 +273,7 @@ async function refresh() {
 
 async function select(name) {
   current = name;
+  sel = null;
   const g = routes.find((r) => r.name === name);
   $('#title').textContent = name;
   $('#sub').textContent = g ? `${g.dirs[0].start} → ${g.dirs[0].end}` : '';
