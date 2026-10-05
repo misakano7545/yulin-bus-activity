@@ -178,8 +178,57 @@ func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 	for _, pt := range up.Route {
 		rt.Track = append(rt.Track, [3]float64{pt.Lng, pt.Lat, float64(pt.StopOrder)})
 	}
+	applyStopPosFix(rt.Track, lineID, rt.Stops)
 	c.cache.put(key, rt, ttlStatic)
 	return rt, nil
+}
+
+// stopPosFix 修正「上游把某站标在绕行支线上」的记录。
+//
+// 上游每个站带 physicalStId（物理站台）：同名站若真有多个站台，各给一个 id。
+// 实测 G02 的 order 29「人民大北路口」与 1路/4路/G02路定制 的 physicalStId
+// 完全相同 —— 车来了自己认定是同一个站台 —— 但它的坐标偏了 132m，还落在折线
+// 一段「绕出去再折返」的支线上，画出来就跑到马路对面去了。
+// （同名站之间漂几十米是常态，那本来就可能是路口两侧的不同站台，只有「同名 +
+// 同 physicalStId + 偏离主线」这种自相矛盾的才修。）
+//
+// 修法：把该站的 stopOrder 标记挪到离 canonical 坐标最近的折线点上，站点圆点与
+// 车辆插值就都回到正线。
+// ponytail: 逐条列表修，不做「按 physicalStId 全城归一化」——那要拉全部 46 条
+// 线路详情建索引（车来了的坐标本来就逐条漂 30~150m，全归一化收益不抵机制成本）。
+// 若哪天这种矛盾记录多起来，再上归一化。
+var stopPosFix = map[string][2]float64{
+	"0775315346289:29": {110.144466, 22.628806}, // G02 人民大北路口 → 对齐到 1路 那个点
+}
+
+// applyStopPosFix 把被修正的站在折线上的标记挪到离 target 最近的折线点。
+func applyStopPosFix(track [][3]float64, lineID string, stops []Stop) {
+	for _, s := range stops {
+		target, ok := stopPosFix[fmt.Sprintf("%s:%d", lineID, s.Order)]
+		if !ok {
+			continue
+		}
+		best, bestD := -1, math.Inf(1)
+		for i, p := range track {
+			// 经度按纬度压缩后再比距离，免得把东西向误差算小
+			dx := (p[0] - target[0]) * math.Cos(target[1]*math.Pi/180)
+			dy := p[1] - target[1]
+			if d := dx*dx + dy*dy; d < bestD {
+				best, bestD = i, d
+			}
+		}
+		if best < 0 {
+			continue
+		}
+		// 先清掉原标记：同一个 order 留两个点的话 trackIdx 取到的是后一个（旧点），
+		// 等于没改。
+		for i := range track {
+			if track[i][2] == float64(s.Order) {
+				track[i][2] = 0
+			}
+		}
+		track[best][2] = float64(s.Order)
+	}
 }
 
 // Realtime 返回实时车辆（加密接口：cryptoSign 入参 + AES-256-ECB 出参）。
