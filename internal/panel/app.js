@@ -24,6 +24,8 @@ let current = null;   // 当前线路名
 let detail = [];      // 当前线路各方向的 {dir, stops, track, rt}
 let sel = null;       // 选中的站点 {lineId, order}；刷新后要恢复高亮
 let focusId = null;   // 手动切到的方向（lineId）；null = 用第一个方向
+let shift = 'day';    // 'day' | 'night'：本线的班次（只有 6 路有夜班）
+let shifts = { day: [], night: [] };   // 两个班次各自的方向；detail 指当前那个
 let night = null;     // 本线夜班服务：{stops:Set, from, to}；无夜班则 null
 let timer = null;
 
@@ -372,6 +374,55 @@ function setFocus(lineId) {
   renderCard();
 }
 
+// 状态胶囊。班次/方向一变就得重画：setShift 不重画的话，顶部会留着上一个班次的状态。
+function renderState() {
+  if (!detail.length) return;
+  const [cls, txt] = stateOf((detail.find((it) => it.rt.state === 0) || detail[0]).rt);
+  $('#state').className = 'pill ' + cls;
+  $('#statetxt').textContent = txt;
+}
+
+// 班次切换（日班/夜班）。只有 6 路有夜班：夜班站表是日班的前缀，
+// 但车辆、终点、首末班都是另一套 lineId，日班里看不到。
+function renderShifts() {
+  const box = $('#shifts');
+  box.textContent = '';
+  const g = routes.find((r) => r.name === current);
+  if (!g || !g.night.length) return;
+
+  for (const [k, label, ls] of [['day', '日班', g.dirs], ['night', '夜班', g.night]]) {
+    const b = el('button', shift === k ? 'on' : null);
+    b.type = 'button';
+    b.append(el('span', 'tt', label));
+    b.append(el('span', 'ss', spanOf(ls)));
+    b.addEventListener('click', () => setShift(k));
+    box.append(b);
+  }
+}
+
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const spanOf = (ls) => `${hhmm(Math.min(...ls.map((d) => hm(d.firstTime))))}–` +
+                       `${hhmm(Math.max(...ls.map((d) => hm(d.lastTime))))}`;
+
+function setShift(s) {
+  if (shift === s || !shifts[s].length) return;
+  shift = s;
+  detail = shifts[s];
+  sel = null;          // 选中的站在另一个班次的方向上，不再成立
+  focusId = null;
+  fitted = '';         // 班次换了，重新定视野
+  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
+  if (isMobile()) hideCard();
+  renderState();
+  renderShifts();
+  renderDirs();
+  renderArr();
+  renderMeta();
+  renderRails();
+  renderMap();
+  renderCard();
+}
+
 async function renderMap() {
   const hint = $('#hint');
   const seq = ++mapSeq;
@@ -660,7 +711,9 @@ async function refresh() {
   if (!g) return;
   const wanted = g.name;
   try {
-    const next = await Promise.all(g.dirs.map(async (d) => {
+    // 日班与夜班一起取：夜班是另一套 lineId，不取就看不到夜班的车
+    const all = [...g.dirs, ...g.night];
+    const got = await Promise.all(all.map(async (d) => {
       const [r, rt] = await Promise.all([
         api(`/lines/${encodeURIComponent(d.lineId)}`),
         api(`/lines/${encodeURIComponent(d.lineId)}/realtime`),
@@ -668,13 +721,20 @@ async function refresh() {
       return { dir: d, stops: r.stops || [], track: toGCJ(r.track || []), rt };
     }));
     if (wanted !== current) return;   // 切线路时丢弃过期响应
-    detail = next;
+    shifts = { day: got.slice(0, g.dirs.length), night: got.slice(g.dirs.length) };
+    if (!shifts[shift].length) shift = 'day';   // 这条线没有夜班就回日班
+    detail = shifts[shift];
     stopCache.clear();                // 数据变了，到站缓存作废
 
-    g.online = detail.reduce((n, it) => n + (it.rt.buses || []).length, 0);
-    const [cls, txt] = stateOf((detail.find((it) => it.rt.state === 0) || detail[0]).rt);
-    $('#state').className = 'pill ' + cls;
-    $('#statetxt').textContent = txt;
+    // 夜班站表直接从刚取到的夜班数据里来（原来为了拿站表单独请求一遍）
+    night = g.night.length ? {
+      stops: new Set(shifts.night.flatMap((it) => it.stops.map((s) => s.name))),
+      from: Math.min(...g.night.map((d) => hm(d.firstTime))),
+      to: Math.max(...g.night.map((d) => hm(d.lastTime))),
+    } : null;
+
+    g.online = [...shifts.day, ...shifts.night].reduce((n, it) => n + (it.rt.buses || []).length, 0);
+    renderState();
     $('#upd').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
 
     $('#hint').hidden = true;
@@ -688,6 +748,7 @@ async function refresh() {
     renderArr();
     renderMeta();
     renderRails();
+    renderShifts();
     renderDirs();
     renderCard();
   } catch (e) {
@@ -702,25 +763,13 @@ async function select(name) {
   current = name;
   sel = null;
   focusId = null;         // 换线路后回到第一个方向
+  shift = 'day';          // 以及日班（夜班站表/时段都由 refresh 里重建）
   stopCache.clear();
   closeDrawer();          // 移动端选完就收起抽屉
   const g = routes.find((r) => r.name === name);
   renderLines($('#q').value);
   $('#hint').hidden = false;
   $('#hint').textContent = '加载中…';
-
-  // 夜班站表与时段是静态的，选线路时取一次；服务端对 /lines/{id} 有 1h 缓存
-  night = null;
-  if (g && g.night.length) {
-    try {
-      const rs = await Promise.all(g.night.map((d) => api(`/lines/${encodeURIComponent(d.lineId)}`)));
-      night = {
-        stops: new Set(rs.flatMap((r) => (r.stops || []).map((s) => s.name))),
-        from: Math.min(...g.night.map((d) => hm(d.firstTime))),
-        to: Math.max(...g.night.map((d) => hm(d.lastTime))),
-      };
-    } catch { /* 夜班取不到就退化成不标红 */ }
-  }
 
   await refresh();
   if (isMobile()) hideCard(); else { showCard(); renderCard(); }

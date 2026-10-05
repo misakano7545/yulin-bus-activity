@@ -83,6 +83,18 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .lines li.note.bad { color:var(--bad); }
 
 /* ── 实时到站卡（侧栏）─────────────────────────────────────────────── */
+/* 班次切换：只有 6 路有夜班，其余线路这行是空的（:empty 直接隐藏）。
+   横排两格——「日班」「夜班」是短词，竖排没必要。 */
+.shifts { display:flex; gap:6px; margin-bottom:9px; }
+.shifts:empty { display:none; }
+.shifts button { flex:1; min-width:0; display:flex; align-items:center; justify-content:center;
+  gap:7px; padding:7px 10px; border-radius:9px; cursor:pointer; background:var(--surface-2);
+  border:1px solid var(--line-soft); color:var(--ink-3); font:12.5px var(--sans); }
+.shifts button:hover { border-color:var(--ink-3); color:var(--ink-2); }
+.shifts button.on { border-color:var(--accent); background:var(--accent-soft);
+  color:var(--accent); font-weight:600; }
+.shifts .ss { font:11px var(--mono); opacity:.85; }
+
 /* 方向切换：线路双向，地图与到站列表一次只画一个方向。
    竖排整行而不是并排两格 —— 终点站名（「汽车总站（二医院）」）并排放不下会被截。 */
 .dirs { display:flex; flex-direction:column; gap:6px; margin-bottom:9px; }
@@ -272,6 +284,7 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
     <div class="sidebody">
       <section class="sect">
         <h2>实时到站 <span class="tail" id="upd">—</span></h2>
+        <div class="shifts" id="shifts"></div>
         <div class="dirs" id="dirs"></div>
         <div class="arr" id="arr"></div>
       </section>
