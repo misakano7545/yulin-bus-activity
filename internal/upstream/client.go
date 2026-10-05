@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -164,18 +165,28 @@ func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 }
 
 // Realtime 返回实时车辆（加密接口：cryptoSign 入参 + AES-256-ECB 出参）。
-func (c *Client) Realtime(ctx context.Context, lineID string) (*Realtime, error) {
-	key := "rt:" + lineID
+//
+// targetOrder > 0 时，每辆车的 ETA 是「到该站序」的秒数（到站情况）；
+// 为 0 时是「到终点站」的秒数。
+func (c *Client) Realtime(ctx context.Context, lineID string, targetOrder int) (*Realtime, error) {
+	key := fmt.Sprintf("rt:%s:%d", lineID, targetOrder)
 	if v, ok := c.cache.get(key); ok {
 		return v.(*Realtime), nil
 	}
-	sig, err := cryptoSign(map[string]any{"lineId": lineID})
+	payload := map[string]any{"lineId": lineID}
+	if targetOrder > 0 {
+		payload["targetOrder"] = targetOrder
+	}
+	sig, err := cryptoSign(payload)
 	if err != nil {
 		return nil, err
 	}
 	p := baseParams()
 	p.Set("lineId", lineID)
 	p.Set("cryptoSign", sig)
+	if targetOrder > 0 {
+		p.Set("targetOrder", strconv.Itoa(targetOrder))
+	}
 
 	data, err := c.get(ctx, "bus/line!encryptedLineDetail.action", p)
 	if err != nil {

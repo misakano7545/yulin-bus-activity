@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/misakano7545/yulin-bus-activity/internal/upstream"
 )
@@ -52,7 +53,16 @@ func (h *handler) route(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) realtime(w http.ResponseWriter, r *http.Request) {
-	v, err := h.up.Realtime(r.Context(), r.PathValue("lineId"))
+	target := 0
+	if s := r.URL.Query().Get("targetOrder"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 {
+			http.Error(w, "targetOrder 必须是非负整数", http.StatusBadRequest)
+			return
+		}
+		target = n
+	}
+	v, err := h.up.Realtime(r.Context(), r.PathValue("lineId"), target)
 	if err != nil {
 		writeErr(w, err)
 		return
