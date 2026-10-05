@@ -477,10 +477,8 @@ function renderArr() {
     else if (b.eta <= 180) cls += ' soon';
     const c = el('div', cls);
 
-    const bd = el('span', 'badge', current || '');
-    bd.style.background = lineColor(current || '');
-    c.append(bd);
-
+    // 这里不放线路徽章：整个分区就一条线一个方向，上面那组方向按钮已经写明了，
+    // 每张卡再挂一个同样的徽章只是占掉一行文字的位置。
     const d = el('div', 'dest');
     d.append(el('b', null, `开往 ${it.dir.end}`));
     const sub = [`${b.fleetNo} 号车`, left > 0 ? `距终点 ${left} 站` : '已到终点'];
