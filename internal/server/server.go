@@ -14,6 +14,9 @@ import (
 // Config 是 handler 的依赖。
 type Config struct {
 	Upstream *upstream.Client
+	// AmapKey/AmapSecurity 由 main 从环境变量读入、经 /amap.js 下发前端。
+	AmapKey      string
+	AmapSecurity string
 }
 
 type handler struct {
@@ -25,7 +28,7 @@ func NewHandler(cfg Config) http.Handler {
 	h := &handler{up: cfg.Upstream}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.healthz)
-	panel.Routes(mux)
+	panel.Routes(mux, cfg.AmapKey, cfg.AmapSecurity)
 	mux.HandleFunc("GET /lines", h.lines)
 	mux.HandleFunc("GET /lines/{lineId}", h.route)
 	mux.HandleFunc("GET /lines/{lineId}/realtime", h.realtime)

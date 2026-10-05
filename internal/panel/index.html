@@ -13,7 +13,7 @@
   --ink:#e8ebf2; --ink-2:#a8b0c2; --ink-3:#838b9b;
   --accent:#7c6ff0; --accent-ink:#fff; --accent-soft:rgba(124,111,240,.16);
   --ok:#3ddc97; --warn:#f5b544; --bad:#f0655f;
-  --map:#12161c; --road:#232a35;
+  --map:#12161c;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
   --mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
@@ -25,7 +25,7 @@
   --ink:#14171f; --ink-2:#545c6e; --ink-3:#6b7280;
   --accent:#5b4fd8; --accent-ink:#fff; --accent-soft:rgba(91,79,216,.09);
   --ok:#0b7548; --warn:#8a5a0c; --bad:#c03630;
-  --map:#e9ede6; --road:#fff;
+  --map:#e9ede6;
   --shadow:0 1px 2px rgba(16,20,32,.06),0 10px 30px -16px rgba(16,20,32,.18);
   color-scheme:light;
 }
@@ -96,29 +96,27 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 [data-theme="light"] .ico-moon { display:none; }
 
 /* ── 地图舞台 ──────────────────────────────────────────────────────── */
+/* 底图是高德 JS API 的真实瓦片（不再自绘示意图）。--map 只当瓦片到位前的底色。 */
 .stage { position:relative; flex:1; min-height:0; background:var(--map); overflow:hidden; }
-/* 示意街道网格：纯 CSS，不引底图、不碰 CSP */
-.stage::before { content:''; position:absolute; inset:0; opacity:.75; pointer-events:none;
-  background-image:
-    linear-gradient(var(--road) 1px, transparent 1px),
-    linear-gradient(90deg, var(--road) 1px, transparent 1px);
-  background-size:48px 48px; }
 .map { position:absolute; inset:0; width:100%; height:100%; display:block; }
-.map .rail { fill:none; stroke:var(--accent); stroke-width:7; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
-.map .stop { fill:var(--surface); stroke:var(--accent); stroke-width:3; cursor:pointer; }
-.map .stop:hover { stroke-width:5; }
-.map .stop.skip { stroke:var(--bad); }
-.map .stop.term { fill:var(--accent); }
+
+/* 覆盖物是高德 Marker 的自定义 content，所以走普通 CSS 类，能直接用主题变量 */
+.am-stop { position:relative; width:14px; height:14px; border-radius:50%; box-sizing:border-box;
+  background:var(--surface); border:3px solid var(--accent); cursor:pointer; transition:transform .12s ease; }
+.am-stop:hover { transform:scale(1.3); }
+.am-stop.term { background:var(--accent); }
 /* .on 必须排在 .term 之后：同优先级，靠后者生效 */
-.map .stop.on { fill:var(--accent); stroke:#fff; stroke-width:3.5; }
-/* 标注压在折线上会被划穿，用底色描边做光晕（paint-order 让描边画在字底下） */
-.map .stoplab { font:600 15px var(--sans); fill:var(--ink-2); pointer-events:none;
-  paint-order:stroke; stroke:var(--map); stroke-width:4px; stroke-linejoin:round; }
-.map .stoplab.on { fill:var(--accent); }
-.map .arrow { fill:var(--accent); }
-/* 站点是「白底紫环」的圆，车若只用紫方块会跟折线糊在一起；加一圈底色描边拎出来 */
-.map .bus { fill:var(--accent); stroke:var(--surface); stroke-width:2.5; }
-.map .busglyph { fill:#fff; pointer-events:none; }
+.am-stop.on { background:var(--accent); border-color:#fff; box-shadow:0 0 0 3px var(--accent-soft); }
+.am-stop.skip { border-color:var(--bad); }
+/* 站名做成底色小片压在瓦片上，比给文字描边稳 —— 瓦片底色深浅不可控 */
+.am-lab { position:absolute; left:50%; top:15px; transform:translateX(-50%); white-space:nowrap;
+  font:600 12px var(--sans); color:var(--ink-2); background:var(--surface);
+  padding:1px 6px; border-radius:5px; box-shadow:var(--shadow); }
+.am-stop.on .am-lab { color:var(--accent); }
+.am-stop.skip .am-lab { color:var(--bad); }
+.am-bus { width:24px; height:24px; border-radius:7px; background:var(--accent); box-sizing:border-box;
+  border:2px solid var(--surface); display:grid; place-items:center; box-shadow:var(--shadow); }
+.am-bus svg { width:13px; height:13px; fill:#fff; }
 .hint { position:absolute; inset:0; display:grid; place-items:center; color:var(--ink-3); font-size:13.5px;
   pointer-events:none; }
 
@@ -246,7 +244,7 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
     </header>
 
     <div class="stage" id="stage">
-      <svg class="map" id="map" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="线路示意图"></svg>
+      <div class="map" id="map" role="img" aria-label="线路地图"></div>
       <div class="hint" id="hint">左侧选一条线路。</div>
       <section class="card" id="infosect" aria-live="polite">
         <div class="grab" id="grab" role="button" tabindex="0" aria-label="收起"></div>
@@ -255,6 +253,7 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
     </div>
   </main>
 </div>
+<script src="amap.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

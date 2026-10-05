@@ -5,19 +5,19 @@
 //   GET /lines/{id}                 站点序列 + 走向折线
 //   GET /lines/{id}/realtime        实时车辆
 //
-// CSP 是 script-src 'self' 且无 unsafe-inline，所以：不写内联事件、不用 eval。
-// 所有站点/线路名都经 textContent 落 DOM，不拼 innerHTML（上游数据也是外部输入）。
+// CSP 是 script-src 'self'（外加 webapi.amap.com）且无 unsafe-inline，所以：
+// 不写内联事件、不用 eval。站点/线路名一律经 textContent 落 DOM
+//（上游数据也是外部输入）；地图覆盖物的 content 是自造 HTML，只用固定模板。
 //
-// 地图是自绘 SVG，不引地图库、不拉瓦片：折线本来就有，站点位置直接用折线上的
-// 站点标记，车辆按 (order, pos) 插值 —— 于是车辆永远压在道路上，且全程不需要
-// 坐标基准换算（上游 gpstype=bd，而车辆是 WGS，两者差约 500m；站点自身的
-// lat/lng 与折线也不是同一套，实测差 1km 以上，所以地图一律不碰站坐标）。
+// 底图是高德 JS API（真实瓦片、可缩放），key 由 /amap.js 下发（见 panel.go）。
+// 折线与车辆仍然用「沿折线按 (order, pos) 插值」定位 —— 车标永远压在道路上，
+// 不需要车自身的经纬度，也就绕开了车辆坐标与折线基准是否一致的疑问（实测同基准）。
+// 折线本身是 WGS-84，而高德底图是 GCJ-02，所以取到折线后统一转一次，下游全程 GCJ。
 'use strict';
 
 const $ = (s) => document.querySelector(s);
 const REFRESH_MS = 10000;
 const SVGNS = 'http://www.w3.org/2000/svg';
-const VB_W = 1000, VB_H = 700, VB_PAD = 76;
 
 let routes = [];      // 按线路名合并后的 22 条：{name, dirs:[Line,…], night:[Line,…]}
 let current = null;   // 当前线路名
@@ -63,6 +63,8 @@ function applyTheme() {
   const eff = theme === 'auto' ? (mqLight.matches ? 'light' : 'dark') : theme;
   document.documentElement.dataset.theme = eff;
   $('#btnTheme').title = eff === 'light' ? '切换到深色' : '切换到浅色';
+  // 覆盖物的颜色走 CSS 变量，跟着主题自动变；只有底图要显式切一套样式
+  if (amap) amap.setMapStyle(mapStyle());
 }
 
 function initTheme() {
@@ -240,25 +242,83 @@ function busPoint(track, idx, order, pos) {
   return track[b];
 }
 
-// 经纬度 → viewBox 坐标：先按中心纬度做平面化（经度缩 cos），再等比缩放居中，y 轴翻转。
-function projector(pts) {
-  let lng0 = 0, lat0 = 0;
-  for (const p of pts) { lng0 += p[0]; lat0 += p[1]; }
-  lng0 /= pts.length; lat0 /= pts.length;
-  const k = Math.cos((lat0 * Math.PI) / 180);
-  let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
-  for (const p of pts) {
-    const x = p[0] * k, y = p[1];
-    if (x < minx) minx = x; if (x > maxx) maxx = x;
-    if (y < miny) miny = y; if (y > maxy) maxy = y;
-  }
-  const s = Math.min((VB_W - 2 * VB_PAD) / Math.max(maxx - minx, 1e-9),
-                     (VB_H - 2 * VB_PAD) / Math.max(maxy - miny, 1e-9));
-  const ox = (VB_W - (maxx - minx) * s) / 2, oy = (VB_H - (maxy - miny) * s) / 2;
-  return ([lng, lat]) => [(lng * k - minx) * s + ox, VB_H - ((lat - miny) * s + oy)];
+/* ── 坐标基准 ─────────────────────────────────────────────────────── */
+// 上游折线是 WGS-84。实测依据：直接铺在高德瓦片上，整条线偏到街区里；按下面
+// 转换后才压着道路，且用维基百科上「玉林站」的 WGS-84 坐标反查，转换后才落在
+// 高德瓦片画的玉林站里。高德底图是 GCJ-02，所以进地图前统一转一次。
+const GCJ_A = 6378245.0, GCJ_EE = 0.00669342162296594323;
+const outOfChina = (lng, lat) =>
+  !(lng > 72.004 && lng < 137.8347 && lat > 0.8293 && lat < 55.8271);
+
+function wgs2gcj(lng, lat) {
+  if (outOfChina(lng, lat)) return [lng, lat];
+  const x = lng - 105, y = lat - 35, S = Math.sin;
+  let dLat = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  dLat += (20 * S(6 * x * Math.PI) + 20 * S(2 * x * Math.PI)) * 2 / 3;
+  dLat += (20 * S(y * Math.PI) + 40 * S(y / 3 * Math.PI)) * 2 / 3;
+  dLat += (160 * S(y / 12 * Math.PI) + 320 * S(y * Math.PI / 30)) * 2 / 3;
+  let dLng = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  dLng += (20 * S(6 * x * Math.PI) + 20 * S(2 * x * Math.PI)) * 2 / 3;
+  dLng += (20 * S(x * Math.PI) + 40 * S(x / 3 * Math.PI)) * 2 / 3;
+  dLng += (150 * S(x / 12 * Math.PI) + 300 * S(x / 30 * Math.PI)) * 2 / 3;
+  const rad = lat * Math.PI / 180, magic = 1 - GCJ_EE * S(rad) * S(rad), sq = Math.sqrt(magic);
+  return [lng + dLng * 180 / (GCJ_A / sq * Math.cos(rad) * Math.PI),
+          lat + dLat * 180 / (GCJ_A * (1 - GCJ_EE) / (magic * sq) * Math.PI)];
 }
 
+// 折线点 [lng, lat, stopOrder] → 同结构、已转 GCJ。取到折线时转一次，下游全程 GCJ。
+const toGCJ = (track) => track.map((p) => {
+  const [lng, lat] = wgs2gcj(p[0], p[1]);
+  return [lng, lat, p[2]];
+});
+
 const BUS_D = 'M2 2h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm0 1v5h12V3H2zm1 7.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm10 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z';
+
+/* ── 高德底图 ─────────────────────────────────────────────────────── */
+// 实例只建一次：重建会丢掉瓦片缓存与相机位置。换线路只换覆盖物。
+let amap = null;
+let overlay = [];        // 当前线路的覆盖物，重绘前整批摘掉
+let amapLoading = null;  // 首次加载高德脚本的 promise，复用避免重复插 script
+let mapSeq = 0;          // 渲染序号：异步等脚本期间若有更新的渲染排队，这次作废
+
+const mapStyle = () => (document.documentElement.dataset.theme === 'light'
+  ? 'amap://styles/normal' : 'amap://styles/dark');
+
+function loadAmapScript() {
+  const cfg = window.YBA_AMAP || {};
+  if (!cfg.key) return Promise.reject(new Error('服务端未配置高德 key（YBA_AMAP_KEY）'));
+  if (cfg.security) window._AMapSecurityConfig = { securityJsCode: cfg.security };
+  return new Promise((ok, no) => {
+    const s = document.createElement('script');
+    s.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(cfg.key);
+    s.onload = ok;
+    s.onerror = () => no(new Error('高德脚本加载失败'));
+    document.head.append(s);
+  });
+}
+
+function ensureMap() {
+  if (!amapLoading) {
+    amapLoading = loadAmapScript().then(() => {
+      amap = new AMap.Map('map', {
+        viewMode: '2D', zoom: 15, center: [110.1584, 22.5978], mapStyle: mapStyle(),
+      });
+      amap.on('click', () => deselect());   // 点空白处取消选中
+    });
+  }
+  return amapLoading;
+}
+
+function clearOverlay() {
+  if (overlay.length) { amap.remove(overlay); overlay = []; }
+}
+
+// 覆盖物用自定义 content 而不是高德内置图标：直接吃页面 CSS 变量，跟着主题走。
+function stopContent(kind, label) {
+  const box = el('div', 'am-stop' + kind);
+  if (label != null) box.append(el('span', 'am-lab', label));
+  return box;
+}
 
 /* ── 地图 ─────────────────────────────────────────────────────────── */
 // 只画「当前选中站点所属的方向」；没选中就画第一个方向。
@@ -271,17 +331,25 @@ function focusDir() {
   return detail[0];
 }
 
-function renderMap() {
-  const map = $('#map');
-  map.textContent = '';
+async function renderMap() {
+  const hint = $('#hint');
+  const seq = ++mapSeq;
+  try {
+    await ensureMap();
+  } catch (e) {
+    hint.hidden = false;
+    hint.textContent = `底图不可用：${e.message}`;
+    return;
+  }
+  if (seq !== mapSeq) return;   // 期间有更新的渲染，这次作废
+  clearOverlay();
   if (!detail.length) return;
 
   const it = focusDir();
   const track = it.track || [];
   if (!track.length || !it.stops.length) {
-    const t = svgEl('text', { x: VB_W / 2, y: VB_H / 2, 'text-anchor': 'middle', class: 'stoplab' });
-    t.textContent = '这条线路没有走向数据';
-    map.append(t);
+    hint.hidden = false;
+    hint.textContent = '这条线路没有走向数据';
     return;
   }
 
@@ -294,57 +362,46 @@ function renderMap() {
     byOrder.get(b.order).push(b);
   }
 
-  // 投影只依赖折线，不依赖站坐标
-  const proj = projector(track);
+  // showDir 让折线自己带方向箭头，省掉手画箭头那段几何
+  overlay.push(new AMap.Polyline({
+    path: track.map((p) => [p[0], p[1]]),
+    strokeColor: lineColor(current || ''), strokeWeight: 6, strokeOpacity: 0.85,
+    lineJoin: 'round', lineCap: 'round', showDir: true, zIndex: 50,
+  }));
 
-  // 走向折线
-  const pts = track.map((p) => proj(p).map((v) => v.toFixed(1)).join(',')).join(' ');
-  map.append(svgEl('polyline', { class: 'rail', points: pts }));
-
-  // 折线本身没有方向感，在行车终点补一个箭头
-  if (track.length > 1) {
-    const e = proj(track[track.length - 1]), pv = proj(track[track.length - 2]);
-    const ang = (Math.atan2(e[1] - pv[1], e[0] - pv[0]) * 180) / Math.PI;
-    map.append(svgEl('path', { class: 'arrow', d: 'M0,0 L-15,-7.5 L-15,7.5 Z',
-      transform: `translate(${e[0].toFixed(1)},${e[1].toFixed(1)}) rotate(${ang.toFixed(1)})` }));
-  }
-
-  // 站点圆点 + 标注
   for (const s of it.stops) {
-    const [x, y] = proj(track[stopIdx(track, idx, s.order)]);
+    const spot = track[stopIdx(track, idx, s.order)];
     const term = s.order === it.stops[0].order || s.order === it.stops[it.stops.length - 1].order;
     const skip = nightOn && !night.stops.has(s.name);
-    const on = sel && sel.lineId === it.dir.lineId && sel.order === s.order;
-    let cls = 'stop' + (skip ? ' skip' : '') + (term ? ' term' : '');
-    if (on) cls += ' on';
-    const c = svgEl('circle', { class: cls, cx: x.toFixed(1), cy: y.toFixed(1), r: on ? 8 : term ? 6.5 : 5 });
-    c.tabIndex = 0;
-    c.addEventListener('click', () => selectStop(it, s));
-    c.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectStop(it, s); }
-    });
-    map.append(c);
-
+    const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
     // 43 站的线全标名字会糊成一片：只标首末站、选中站、以及此刻有车的站
-    if (term || on || byOrder.has(s.order)) {
-      const t = svgEl('text', { class: 'stoplab' + (on ? ' on' : ''), x: x.toFixed(1), y: (y + 22).toFixed(1),
-        'text-anchor': 'middle' });
-      t.textContent = s.name;
-      map.append(t);
-    }
+    let kind = '';
+    if (skip) kind += ' skip';
+    if (term) kind += ' term';
+    if (on) kind += ' on';
+    const box = stopContent(kind, term || on || byOrder.has(s.order) ? s.name : null);
+    const m = new AMap.Marker({
+      position: [spot[0], spot[1]], anchor: 'center', content: box,
+      zIndex: on ? 120 : term ? 110 : 100, cursor: 'pointer',
+      title: skip ? `${s.name}（夜班不停）` : s.name,
+    });
+    m.on('click', () => selectStop(it, s));
+    overlay.push(m);
   }
 
-  // 车辆：按 (order, pos) 落在折线上
   for (const b of buses) {
-    const [x, y] = proj(busPoint(track, idx, b.order, b.pos));
-    const g = svgEl('g', { transform: `translate(${(x - 11).toFixed(1)},${(y - 11).toFixed(1)})` });
-    g.append(svgEl('rect', { class: 'bus', width: 22, height: 22, rx: 6 }));
-    g.append(svgEl('path', { class: 'busglyph', d: BUS_D, transform: 'translate(3,3)' }));
-    const ti = svgEl('title', {});
-    ti.textContent = `${b.fleetNo} · 前往 ${it.stops.find((s) => s.order === b.order)?.name || '下一站'}`;
-    g.append(ti);
-    map.append(g);
+    const p = busPoint(track, idx, b.order, b.pos);
+    const box = el('div', 'am-bus');
+    box.append(busIcon());
+    overlay.push(new AMap.Marker({
+      position: [p[0], p[1]], anchor: 'center', content: box, zIndex: 200,
+      title: `${b.fleetNo} · 前往 ${it.stops.find((s) => s.order === b.order)?.name || '下一站'}`,
+    }));
   }
+
+  amap.add(overlay);
+  amap.setFitView(overlay, false, [70, 70, 70, 70], 16);
+  hint.hidden = true;
 }
 
 /* ── 到站卡内容 ───────────────────────────────────────────────────── */
@@ -509,7 +566,7 @@ async function refresh() {
         api(`/lines/${encodeURIComponent(d.lineId)}`),
         api(`/lines/${encodeURIComponent(d.lineId)}/realtime`),
       ]);
-      return { dir: d, stops: r.stops || [], track: r.track || [], rt };
+      return { dir: d, stops: r.stops || [], track: toGCJ(r.track || []), rt };
     }));
     if (wanted !== current) return;   // 切线路时丢弃过期响应
     detail = next;
@@ -570,12 +627,7 @@ async function boot() {
   initDrawer();
   initSheet();
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
-  // 点地图空白处取消选中；点卡片内部不触发
-  $('#stage').addEventListener('click', (e) => {
-    if (e.target.closest('.card')) return;
-    if (e.target.tagName === 'circle' || e.target.tagName === 'polyline') return;
-    deselect();
-  });
+  // 点地图空白处取消选中由高德的 map click 处理（见 ensureMap），这里不再重复监听
   try {
     routes = groupByName(await api('/lines'));
     renderLines('');
