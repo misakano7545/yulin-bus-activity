@@ -24,6 +24,9 @@ type wireStop struct {
 type wirePoint struct {
 	Lng float64 `json:"lng"`
 	Lat float64 `json:"lat"`
+	// StopOrder 标记「这个折线点就是第 N 站」；非站点为 0。
+	// 上游只在站边界点带它，靠它把折线切成站间段。
+	StopOrder int `json:"stopOrder"`
 }
 
 type wireMeta struct {

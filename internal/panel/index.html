@@ -5,193 +5,220 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>玉林实时公交</title>
 <style>
-/* ── 设计令牌（沿用 workbuddy2api-panel 的冷石墨基调）───────────────── */
+/* ── 设计令牌 ──────────────────────────────────────────────────────
+   浅色是主场景（对照设计稿的白色卡片 + 淡青底图）；深色沿用原来的冷石墨。 */
 :root {
-  --bg:#0c0e14; --surface:#14171f; --surface-2:#1a1e28; --raise:#202531;
+  --bg:#0c0e14; --surface:#14171f; --surface-2:#1a1e28;
   --line:#262c3a; --line-soft:#1e232e;
   --ink:#e8ebf2; --ink-2:#a8b0c2; --ink-3:#838b9b;
-  --accent:#5b7cfa; --accent-ink:#fff; --accent-soft:rgba(91,124,250,.13);
-  --ok:#3ddc97; --ok-soft:rgba(61,220,151,.12);
-  --warn:#f5b544; --warn-soft:rgba(245,181,68,.12);
-  --bad:#f0655f; --bad-soft:rgba(240,101,95,.12);
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.5);
+  --accent:#7c6ff0; --accent-ink:#fff; --accent-soft:rgba(124,111,240,.16);
+  --ok:#3ddc97; --warn:#f5b544; --bad:#f0655f;
+  --map:#12161c; --road:#232a35;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
   --mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;
   --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   color-scheme:dark;
 }
 [data-theme="light"] {
-  --bg:#f4f5f8; --surface:#fff; --surface-2:#f8f9fb; --raise:#fff;
-  --line:#e2e5ec; --line-soft:#eceef3;
-  --ink:#14171f; --ink-2:#545c6e; --ink-3:#686e7b;
-  --accent:#3d5fe0; --accent-ink:#fff; --accent-soft:rgba(61,95,224,.09);
-  --ok:#0b7548; --ok-soft:rgba(15,157,99,.1);
-  --warn:#8a5a0c; --warn-soft:rgba(180,118,17,.11);
-  --bad:#c03630; --bad-soft:rgba(207,59,52,.09);
-  --shadow:0 1px 2px rgba(16,20,32,.06),0 8px 24px -14px rgba(16,20,32,.14);
+  --bg:#f4f5f8; --surface:#fff; --surface-2:#f6f7fa;
+  --line:#e4e7ee; --line-soft:#eef0f5;
+  --ink:#14171f; --ink-2:#545c6e; --ink-3:#6b7280;
+  --accent:#5b4fd8; --accent-ink:#fff; --accent-soft:rgba(91,79,216,.09);
+  --ok:#0b7548; --warn:#8a5a0c; --bad:#c03630;
+  --map:#e9ede6; --road:#fff;
+  --shadow:0 1px 2px rgba(16,20,32,.06),0 10px 30px -16px rgba(16,20,32,.18);
   color-scheme:light;
 }
 * { box-sizing:border-box; margin:0; padding:0; }
 [hidden] { display:none !important; }
 html,body { height:100%; }
 body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webkit-font-smoothing:antialiased; }
-:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 .num { font-family:var(--mono); font-variant-numeric:tabular-nums; }
 
 /* ── 壳层 ──────────────────────────────────────────────────────────── */
-.shell { display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
-/* 移动端抽屉相关的默认值；@media 块在样式表末尾，避免被后面的基础规则覆盖 */
+.shell { display:grid; grid-template-columns:288px 1fr; height:100vh; height:100dvh; }
 .scrim { display:none; }
 
-.side { background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
-.brand { padding:18px 16px 14px; border-bottom:1px solid var(--line-soft); }
+.side { background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+.brand { display:flex; align-items:center; gap:10px; padding:16px 16px 14px; border-bottom:1px solid var(--line-soft); }
+.brand .logo { width:32px; height:32px; border-radius:9px; background:var(--accent); color:#fff;
+  display:grid; place-items:center; flex:none; }
+.brand .logo svg { width:19px; height:19px; }
 .brand .name { font-weight:650; font-size:15px; letter-spacing:-.01em; }
-.brand .sub { color:var(--ink-3); font-size:11.5px; font-family:var(--mono); margin-top:3px; }
-.search { padding:10px 12px; border-bottom:1px solid var(--line-soft); }
-.search input { width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:7px; color:var(--ink); font:13.5px var(--sans); padding:7px 10px; }
-.search input::placeholder { color:var(--ink-3); }
+.brand .sub { color:var(--ink-3); font-size:11.5px; margin-top:1px; }
 
-.lines { list-style:none; overflow-y:auto; flex:1; padding:6px 8px 16px; }
-.lines li { display:flex; align-items:center; gap:10px; padding:8px 11px; margin-bottom:2px; border-radius:7px; cursor:pointer; color:var(--ink-2); font-size:13.5px; }
+.lines { list-style:none; overflow-y:auto; flex:1; min-height:0; padding:8px; }
+.lines li { display:flex; align-items:center; gap:10px; padding:9px 10px; margin-bottom:2px;
+  border-radius:9px; cursor:pointer; color:var(--ink-2); font-size:13.5px; }
 .lines li:hover { background:var(--surface-2); color:var(--ink); }
 .lines li.on { background:var(--accent-soft); color:var(--accent); font-weight:550; }
-.lines .no { font-family:var(--mono); font-weight:600; min-width:56px; flex:none; }
+.lines .badge { flex:none; min-width:44px; height:24px; padding:0 7px; border-radius:7px;
+  display:grid; place-items:center; color:#fff; font:650 12px/1 var(--mono); }
 .lines .to { color:var(--ink-3); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lines li.on .to { color:var(--accent); opacity:.75; }
 .lines .n { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--ok); flex:none; }
 .lines .n.zero { color:var(--ink-3); }
+/* 上游把营运状态塞进线路名后缀，摘出来做徽章并压暗整行 */
+.lines .tag { flex:none; font-size:10.5px; padding:1px 6px; border-radius:999px;
+  background:color-mix(in srgb, var(--bad) 13%, transparent); color:var(--bad); }
+.lines li.off .badge { opacity:.4; }
+.lines li.off .to { opacity:.5; }
+.lines .note { cursor:default; color:var(--ink-3); font-size:13px; padding:14px 10px; display:block; }
+.lines .note:hover { background:none; }
 
 /* ── 主区 ──────────────────────────────────────────────────────────── */
-.main { display:flex; flex-direction:column; min-width:0; }
-.top { display:flex; align-items:center; gap:14px; padding:16px 22px; border-bottom:1px solid var(--line); background:var(--surface); position:sticky; top:0; z-index:2; }
-.top h1 { font-size:17px; font-weight:650; letter-spacing:-.01em; }
-.top .meta { color:var(--ink-3); font-size:12.5px; }
-.top .right { margin-left:auto; display:flex; align-items:center; gap:12px; color:var(--ink-3); font-size:12px; }
-.pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; background:var(--surface-2); border:1px solid var(--line); }
-.pill.run { background:var(--ok-soft); color:var(--ok); border-color:transparent; }
-.pill.idle { background:var(--warn-soft); color:var(--warn); border-color:transparent; }
-.pill.off { background:var(--bad-soft); color:var(--bad); border-color:transparent; }
-.live { width:6px; height:6px; border-radius:50%; background:var(--ok); }
-.iconbtn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:7px; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2); cursor:pointer; padding:0; }
+.main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+.top { display:flex; align-items:center; gap:12px; padding:12px 18px; border-bottom:1px solid var(--line);
+  background:var(--surface); flex:none; }
+.search { flex:1; max-width:520px; position:relative; }
+.search svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); width:15px; height:15px;
+  color:var(--ink-3); pointer-events:none; }
+.search input { width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:9px;
+  color:var(--ink); font:13.5px var(--sans); padding:8px 11px 8px 33px; }
+.search input::placeholder { color:var(--ink-3); }
+.top .right { margin-left:auto; display:flex; align-items:center; gap:11px; color:var(--ink-3); font-size:12px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px;
+  background:var(--surface-2); border:1px solid var(--line); white-space:nowrap; }
+.pill.run { background:color-mix(in srgb, var(--ok) 12%, transparent); color:var(--ok); border-color:transparent; }
+.pill.idle { background:color-mix(in srgb, var(--warn) 14%, transparent); color:var(--warn); border-color:transparent; }
+.pill.off { background:color-mix(in srgb, var(--bad) 12%, transparent); color:var(--bad); border-color:transparent; }
+.live { width:6px; height:6px; border-radius:50%; background:currentColor; }
+.iconbtn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+  border-radius:8px; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2);
+  cursor:pointer; padding:0; flex:none; }
 .iconbtn:hover { color:var(--ink); border-color:var(--ink-3); }
-/* 必须用两个类：.iconbtn 的 display 在后面且同优先级，单类 .menubtn 会被它盖掉 */
+/* 必须双类：.iconbtn 的 display 在后面且同优先级，单类会被盖掉 */
 .iconbtn.menubtn { display:none; }
 /* 图标跟着主题走，省掉 JS 换 innerHTML */
 [data-theme="dark"] .ico-sun { display:none; }
 [data-theme="light"] .ico-moon { display:none; }
 
-.body { padding:18px 22px 40px; }
-.note { padding:14px 16px; color:var(--ink-3); font-size:13px; }
-.note.bad { color:var(--bad); }
-.sect { margin-top:20px; }
-.sect h2 { font-size:13px; font-weight:600; color:var(--ink-3); margin-bottom:10px; letter-spacing:.02em; }
-/* 到站信息：桌面内联在走向条下方，没选中站点就整块不显示；
-   移动端在样式表末尾的 @media 里改成底部抽屉，靠 transform 滑入滑出。 */
-#infosect { display:none; }
-#infosect.on { display:block; }
+/* ── 地图舞台 ──────────────────────────────────────────────────────── */
+.stage { position:relative; flex:1; min-height:0; background:var(--map); overflow:hidden; }
+/* 示意街道网格：纯 CSS，不引底图、不碰 CSP */
+.stage::before { content:''; position:absolute; inset:0; opacity:.75; pointer-events:none;
+  background-image:
+    linear-gradient(var(--road) 1px, transparent 1px),
+    linear-gradient(90deg, var(--road) 1px, transparent 1px);
+  background-size:48px 48px; }
+.map { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.map .rail { fill:none; stroke:var(--accent); stroke-width:7; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
+.map .stop { fill:var(--surface); stroke:var(--accent); stroke-width:3; cursor:pointer; }
+.map .stop:hover { stroke-width:5; }
+.map .stop.skip { stroke:var(--bad); }
+.map .stop.term { fill:var(--accent); }
+/* .on 必须排在 .term 之后：同优先级，靠后者生效 */
+.map .stop.on { fill:var(--accent); stroke:#fff; stroke-width:3.5; }
+/* 标注压在折线上会被划穿，用底色描边做光晕（paint-order 让描边画在字底下） */
+.map .stoplab { font:600 15px var(--sans); fill:var(--ink-2); pointer-events:none;
+  paint-order:stroke; stroke:var(--map); stroke-width:4px; stroke-linejoin:round; }
+.map .stoplab.on { fill:var(--accent); }
+.map .arrow { fill:var(--accent); }
+/* 站点是「白底紫环」的圆，车若只用紫方块会跟折线糊在一起；加一圈底色描边拎出来 */
+.map .bus { fill:var(--accent); stroke:var(--surface); stroke-width:2.5; }
+.map .busglyph { fill:#fff; pointer-events:none; }
+.hint { position:absolute; inset:0; display:grid; place-items:center; color:var(--ink-3); font-size:13.5px;
+  pointer-events:none; }
+
+/* ── 到站卡：桌面浮在地图左下，移动端变底部抽屉 ────────────────────── */
+.card { position:absolute; left:16px; bottom:16px; width:min(430px,calc(100% - 32px)); max-height:calc(100% - 32px);
+  overflow-y:auto; background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  box-shadow:var(--shadow); padding:14px 16px; display:none; }
+.card.on { display:block; }
 .grab { display:none; width:38px; height:4px; border-radius:2px; background:var(--line);
-  margin:9px auto 6px; cursor:grab; touch-action:none; }
+  margin:0 auto 10px; cursor:grab; touch-action:none; }
 .grab:active { cursor:grabbing; }
 
-/* ── 走向条：两方向共用一条轴，各占一条轨 ──────────────────────────
-   每轨按自己的行车顺序排；反向轨倒序渲染，端点因此左右对齐。
-   中间站只是大致对齐 —— 23 条线里只有 1 条两方向严格互逆，其余站表不同。 */
-.strip { display:flex; flex-direction:column; gap:14px; }
-.railbox { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
-.railhead { display:flex; align-items:center; gap:9px; padding:11px 16px; border-bottom:1px solid var(--line-soft); font-size:13px; flex-wrap:wrap; }
-.railhead .dir { font-weight:600; }
-.railhead .st { font-size:11.5px; padding:2px 8px; border-radius:999px; }
-.railhead .st.run { background:var(--ok-soft); color:var(--ok); }
-.railhead .st.idle { background:var(--warn-soft); color:var(--warn); }
-.railhead .st.off { background:var(--bad-soft); color:var(--bad); }
-.railhead .cnt { color:var(--ink-3); font-size:12px; margin-left:auto; font-family:var(--mono); }
-.railhead .legend { font-size:11.5px; color:var(--bad); }
+.businfo .h { display:flex; align-items:baseline; gap:9px; margin-bottom:10px; flex-wrap:wrap; }
+.businfo .stn { font-size:16px; font-weight:650; }
+.businfo .dir { color:var(--ink-3); font-size:12px; margin-left:auto; }
+.businfo .row { display:flex; align-items:baseline; gap:10px; padding:6px 0; font-size:13px;
+  border-bottom:1px solid var(--line-soft); }
+.businfo .row:last-child { border-bottom:0; }
+.businfo .row .fno { font-family:var(--mono); font-weight:650; color:var(--ink); }
+.businfo .row .eta { margin-left:auto; font-weight:650; color:var(--ok); font-size:14px; }
+.businfo .row .at { color:var(--ink-3); font-size:12px; font-family:var(--mono); }
+.businfo .note { color:var(--ink-3); font-size:13px; padding:6px 0; }
+.businfo .note.bad { color:var(--bad); }
 
-.railscroll { overflow-x:auto; padding:14px 16px 6px; }
+/* 线路走向条：设计稿没有，但它承载夜班差异路段，删了会丢信息 */
+.sect { margin-top:12px; border-top:1px solid var(--line-soft); padding-top:10px; }
+.sect h2 { font-size:12px; font-weight:600; color:var(--ink-3); margin-bottom:8px; }
+.railbox { margin-bottom:10px; }
+.railhead { display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:8px; flex-wrap:wrap; }
+.railhead .dir { font-weight:600; }
+.railhead .st { font-size:11px; padding:2px 7px; border-radius:999px; }
+.railhead .st.run { background:color-mix(in srgb, var(--ok) 13%, transparent); color:var(--ok); }
+.railhead .st.idle { background:color-mix(in srgb, var(--warn) 15%, transparent); color:var(--warn); }
+.railhead .st.off { background:color-mix(in srgb, var(--bad) 13%, transparent); color:var(--bad); }
+.railhead .cnt { color:var(--ink-3); font-size:11.5px; margin-left:auto; font-family:var(--mono); }
+.railhead .legend { font-size:11px; color:var(--bad); }
+.railscroll { overflow-x:auto; padding-bottom:2px; }
 .rail { display:flex; align-items:flex-start; min-width:min-content; }
 /* 站名横排。不用 writing-mode:vertical-rl —— 实测无头 Chromium 缺竖排字体度量，
    字会挤成墨团（高度 0），且真实浏览器行为无法在此验证。 */
-.rstop { position:relative; flex:0 0 auto; width:64px; display:flex; flex-direction:column; align-items:center; cursor:pointer; }
-.rstop:hover .dot { border-color:var(--ink); }
-.rstop:hover .nm { color:var(--ink); }
-.rstop.on .dot { background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
-.rstop.on .nm { color:var(--accent); font-weight:650; }
-.rstop::before { content:''; position:absolute; left:0; right:0; top:44px; height:2px; background:var(--accent); opacity:.45; }
-.rstop .dot { position:relative; z-index:1; width:9px; height:9px; border-radius:50%; background:var(--surface); border:2px solid var(--accent); }
+.rstop { position:relative; flex:0 0 auto; width:60px; display:flex; flex-direction:column; align-items:center;
+  cursor:pointer; }
+.rstop::before { content:''; position:absolute; left:0; right:0; top:22px; height:2px;
+  background:var(--accent); opacity:.4; }
+.rstop .dot { position:relative; z-index:1; width:9px; height:9px; border-radius:50%;
+  background:var(--surface); border:2px solid var(--accent); }
 .rstop.term .dot { background:var(--accent); }
-.rstop .nm { margin-top:6px; font-size:11px; line-height:1.35; color:var(--ink-2); text-align:center;
-  height:2.7em; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
-  text-wrap:balance; }
-.rstop.term .nm { font-weight:650; color:var(--ink); }
-/* 夜班营运时段：夜班不停的站标红。放最后并把 .term/.on 都列进选择器，
-   否则 .rstop.term .nm 同优先级且在后，会把首站的红字盖掉。 */
+.rstop.on .dot { background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+.rstop:hover .nm, .rstop.on .nm { color:var(--ink); }
+.rstop.on .nm { color:var(--accent); font-weight:650; }
+.rstop .nm { margin-top:5px; font-size:10.5px; line-height:1.3; color:var(--ink-3); text-align:center;
+  height:2.6em; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; text-wrap:balance; }
+.rstop.term .nm { font-weight:650; color:var(--ink-2); }
+/* 夜班不停的站标红。放最后并带上 .term/.on，否则同优先级靠后的规则会把红字盖掉。 */
 .rstop.skip .dot { border-color:var(--bad); }
 .rstop.skip .nm, .rstop.skip.term .nm, .rstop.skip.on .nm { color:var(--bad); }
-/* 车辆图标区固定高度，各站圆点才落在同一条 y 上 */
-.rbuswrap { height:40px; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; }
-.railcap { flex:0 0 auto; width:12px; height:40px; position:relative; }
-.railcap::before { content:''; position:absolute; top:39px; width:0; height:0; border-top:6px solid transparent; border-bottom:6px solid transparent; }
-.railcap.r::before { left:0; border-left:9px solid var(--accent); }
-
+.rbuswrap { height:20px; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; }
 .rbus { display:inline-flex; align-items:center; gap:3px; height:18px; padding:0 5px; border-radius:5px;
-  background:var(--accent); color:var(--accent-ink); font:600 10.5px var(--mono); }
+  background:var(--accent); color:#fff; font:600 10.5px var(--mono); }
 .rbus svg { width:10px; height:10px; flex:none; }
 
-/* ── 到站信息 ──────────────────────────────────────────────────────── */
-.businfo { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px 16px; }
-.businfo .h { display:flex; align-items:baseline; gap:9px; margin-bottom:9px; flex-wrap:wrap; }
-.businfo .stn { font-size:16px; font-weight:650; }
-.businfo .dir { color:var(--ink-3); font-size:12px; margin-left:auto; }
-.businfo .row { display:flex; align-items:baseline; gap:10px; padding:5px 0; font-size:13px; border-bottom:1px solid var(--line-soft); }
-.businfo .row:last-child { border-bottom:0; }
-.businfo .row .fno { font-family:var(--mono); font-weight:650; color:var(--ink); }
-.businfo .row .eta { margin-left:auto; font-weight:600; color:var(--accent); }
-.businfo .row .at { color:var(--ink-3); font-size:12px; font-family:var(--mono); }
-
-/* ── 移动端：侧栏收成抽屉（必须放最后，否则被上面的基础规则覆盖）──────── */
+/* ── 移动端（必须放最后，否则被上面的基础规则覆盖）────────────────── */
 @media (max-width:820px) {
   .shell { grid-template-columns:1fr; }
-  .side {
-    position:fixed; top:0; bottom:0; left:0; z-index:20; height:100dvh;
+  .side { position:fixed; top:0; bottom:0; left:0; z-index:20; height:100dvh;
     width:min(84vw,320px); padding-top:env(safe-area-inset-top);
-    transform:translateX(-100%); transition:transform .2s ease; box-shadow:var(--shadow);
-  }
+    transform:translateX(-100%); transition:transform .2s ease; box-shadow:var(--shadow); }
   .side.open { transform:none; }
   .scrim { display:block; position:fixed; inset:0; z-index:19; background:rgba(0,0,0,.5);
     opacity:0; pointer-events:none; transition:opacity .2s ease; }
   .scrim.on { opacity:1; pointer-events:auto; }
   .iconbtn.menubtn { display:inline-flex; }
-  .top { padding:calc(10px + env(safe-area-inset-top)) 14px 10px; gap:10px; }
-  .body { padding:12px 12px calc(28px + env(safe-area-inset-bottom)); }
-  /* 手指比鼠标粗：触控目标放大 */
-  .rbus { height:22px; padding:0 7px; }
-  .lines li { padding:11px; }
+  .top { padding:calc(9px + env(safe-area-inset-top)) 12px 9px; gap:9px; }
+  .top .right .upd { display:none; }
+  .lines li { padding:11px 10px; }
 
-  /* 到站信息改成底部抽屉（借 BusOne-Map 的 .sheet）。用 transform 而不是
-     display，否则滑入动画没有过渡。 */
-  #infosect {
-    display:block; position:fixed; left:0; right:0; bottom:0; z-index:15; margin:0;
-    background:var(--surface); border-top:1px solid var(--line);
-    border-radius:14px 14px 0 0; box-shadow:var(--shadow);
-    max-height:62dvh; overflow-y:auto;
+  /* 到站卡改底部抽屉。用 transform 而不是 display，否则滑入没有过渡。 */
+  .card { left:0; right:0; bottom:0; width:auto; border:0; border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0; max-height:64dvh; display:block;
     padding:0 14px calc(14px + env(safe-area-inset-bottom));
-    transform:translateY(100%); transition:transform .22s ease; pointer-events:none;
-  }
-  #infosect.on { transform:none; pointer-events:auto; }
-  #infosect .grab { display:block; }
-  /* 抽屉里去掉卡片自身的底/边框，避免和抽屉描边叠成双层 */
-  #infosect .businfo { background:none; border:0; box-shadow:none; padding:0 0 4px; }
+    transform:translateY(100%); transition:transform .22s ease; pointer-events:none; }
+  .card.on { transform:none; pointer-events:auto; }
+  .grab { display:block; margin-top:9px; }
+  .rbus { height:22px; padding:0 7px; }
 }
 </style>
 </head>
 <body>
 <div class="shell">
-  <aside class="side">
+  <aside class="side" id="side">
     <div class="brand">
-      <div class="name">玉林实时公交</div>
-      <div class="sub" id="cityline">车来了 · 玉林市</div>
+      <span class="logo">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 2h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm0 1v5h12V3H2zm1 7.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm10 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>
+      </span>
+      <div>
+        <div class="name">玉林实时公交</div>
+        <div class="sub" id="cityline">车来了 · 玉林市</div>
+      </div>
     </div>
-    <div class="search"><input id="q" type="search" placeholder="搜索线路 / 起终点…" autocomplete="off"></div>
     <ul class="lines" id="lines"><li class="note">加载中…</li></ul>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -201,11 +228,13 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
       <button class="iconbtn menubtn" id="btnMenu" type="button" aria-label="选择线路">
         <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
       </button>
-      <h1 id="title">选择线路</h1>
-      <span class="meta" id="sub"></span>
+      <div class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4 14 14" stroke-linecap="round"/></svg>
+        <input id="q" type="search" placeholder="搜索线路、起终点…" autocomplete="off" aria-label="搜索线路">
+      </div>
       <div class="right">
         <span class="pill" id="state"><span class="live"></span><span id="statetxt">—</span></span>
-        <span>更新 <b class="num" id="ts">—</b></span>
+        <span class="upd">更新 <b class="num" id="ts">—</b></span>
         <button class="iconbtn" id="btnTheme" type="button" aria-label="切换主题">
           <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4">
             <path class="ico-moon" d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z"/>
@@ -216,11 +245,11 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
       </div>
     </header>
 
-    <div class="body">
-      <div class="strip" id="strip"><div class="note">左侧选一条线路。</div></div>
-      <section class="sect" id="infosect">
-        <div class="grab" id="grab" role="button" tabindex="0" aria-label="收起到站信息"></div>
-        <h2>到站信息</h2>
+    <div class="stage" id="stage">
+      <svg class="map" id="map" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="img" aria-label="线路示意图"></svg>
+      <div class="hint" id="hint">左侧选一条线路。</div>
+      <section class="card" id="infosect" aria-live="polite">
+        <div class="grab" id="grab" role="button" tabindex="0" aria-label="收起"></div>
         <div class="businfo" id="businfo"></div>
       </section>
     </div>

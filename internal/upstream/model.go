@@ -26,10 +26,14 @@ type Stop struct {
 // ponytail: lineRoute 的 line 对象只有 lineId+name，票价/状态/描述都在详情接口里，
 // 所以这里不放那几个字段（放了恒为空，比没有更糟）。
 type Route struct {
-	LineID string       `json:"lineId"`
-	Name   string       `json:"name"`
-	Stops  []Stop       `json:"stops"`
-	Track  [][2]float64 `json:"track"` // [lng, lat]
+	LineID string `json:"lineId"`
+	Name   string `json:"name"`
+	Stops  []Stop `json:"stops"`
+	// Track 走向折线，每点 [lng, lat, stopOrder]；stopOrder=0 表示该点不是站点。
+	// 上游 gpstype=bd：折线与站点同为 bd 基准，而车辆是 WGS，两者差约 500m。
+	// 带上「第 N 站落在折线第几个点」后，车辆就能按 (order, pos) 直接插值落在
+	// 道路上，完全绕开坐标基准换算。
+	Track [][3]float64 `json:"track"`
 }
 
 // Bus 是归一化后的实时车辆。

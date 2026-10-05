@@ -170,13 +170,13 @@ func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 	rt := &Route{
 		LineID: up.Line.LineID, Name: up.Line.Name,
 		Stops: make([]Stop, 0, len(up.Stations)),
-		Track: make([][2]float64, 0, len(up.Route)),
+		Track: make([][3]float64, 0, len(up.Route)),
 	}
 	for _, s := range up.Stations {
 		rt.Stops = append(rt.Stops, Stop{ID: s.SID, Name: fixStopName(s.SN), Order: s.Order, Lat: s.Lat, Lng: s.Lng})
 	}
 	for _, pt := range up.Route {
-		rt.Track = append(rt.Track, [2]float64{pt.Lng, pt.Lat})
+		rt.Track = append(rt.Track, [3]float64{pt.Lng, pt.Lat, float64(pt.StopOrder)})
 	}
 	c.cache.put(key, rt, ttlStatic)
 	return rt, nil
