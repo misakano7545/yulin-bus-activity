@@ -415,12 +415,13 @@ async function renderMap() {
     const term = s.order === it.stops[0].order || s.order === it.stops[it.stops.length - 1].order;
     const skip = nightOn && !night.stops.has(s.name);
     const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
-    // 43 站的线全标名字会糊成一片：只标首末站、选中站、以及此刻有车的站
     let kind = '';
     if (skip) kind += ' skip';
     if (term) kind += ' term';
     if (on) kind += ' on';
-    const box = stopContent(kind, term || on || byOrder.has(s.order) ? s.name : null);
+    // 每站都标名字。43 站的长线会挤，靠 .am-lab 的底色小片互相压住还算能看；
+    // 真嫌糊就把这里收回去：只标首末站/选中站/此刻有车的站（原来的做法）。
+    const box = stopContent(kind, s.name);
     const m = new AMap.Marker({
       position: [spot[0], spot[1]], anchor: 'center', content: box,
       zIndex: on ? 120 : term ? 110 : 100, cursor: 'pointer',
