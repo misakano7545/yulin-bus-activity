@@ -15,6 +15,7 @@ const REFRESH_MS = 10000;
 let lines = [];
 let current = null;
 let stops = [];
+let stopByOrder = new Map();
 let timer = null;
 
 async function api(path) {
@@ -55,6 +56,9 @@ function initTheme() {
     applyTheme();
   });
 }
+
+// 站序 → 正式站名；站序不在本线站点表里（上游给 0 或越界）时回退成站序
+const stopName = (order) => stopByOrder.get(order) || `第 ${order} 站`;
 
 // 秒 → 「15分44秒」；到点或已过站返回「—」
 function dur(sec) {
@@ -150,8 +154,8 @@ function renderBuses(rt) {
       r.append(el('span', null, k), el('b', null, v));
       c.append(r);
     };
-    row('当前', `第 ${b.order} 站`);
-    row('目标', `第 ${b.targetOrder} 站`);
+    row('当前', stopName(b.order));
+    row('目标', stopName(b.targetOrder));
     row('预计', b.arriveAt ? `${dur(b.eta)} · ${b.arriveAt}` : dur(b.eta));
     box.append(c);
   }
@@ -191,6 +195,7 @@ async function select(lineId) {
   try {
     const r = await api(`/lines/${encodeURIComponent(lineId)}`);
     stops = r.stops || [];
+    stopByOrder = new Map(stops.map((s) => [s.order, s.name]));
     await refresh();
   } catch (e) {
     card.textContent = '';
