@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/misakano7545/yulin-bus-activity/internal/panel"
 	"github.com/misakano7545/yulin-bus-activity/internal/upstream"
 )
 
@@ -24,6 +25,7 @@ func NewHandler(cfg Config) http.Handler {
 	h := &handler{up: cfg.Upstream}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.healthz)
+	panel.Routes(mux)
 	mux.HandleFunc("GET /lines", h.lines)
 	mux.HandleFunc("GET /lines/{lineId}", h.route)
 	mux.HandleFunc("GET /lines/{lineId}/realtime", h.realtime)
