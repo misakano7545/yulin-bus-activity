@@ -147,15 +147,6 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .businfo .row .fno { font-family:var(--mono); font-weight:650; color:var(--ink); }
 .businfo .row .eta { margin-left:auto; font-weight:600; color:var(--accent); }
 .businfo .row .at { color:var(--ink-3); font-size:12px; font-family:var(--mono); }
-.businfo .row .rem { color:var(--ink-3); font-size:12px; }
-/* 最近一班主卡（对照车来了 APP 的大字倒计时） */
-.businfo .hero { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:2px 0 12px; }
-.businfo .hero .big { display:flex; align-items:baseline; gap:5px; color:var(--accent); }
-.businfo .hero .big.soon { color:var(--warn); }
-.businfo .hero .n { font-family:var(--mono); font-size:38px; font-weight:700; line-height:1;
-  letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
-.businfo .hero .u { font-size:13px; font-weight:600; color:var(--ink-3); }
-.businfo .hero .hmeta { margin-left:auto; text-align:right; color:var(--ink-3); font-size:12.5px; line-height:1.5; }
 
 /* ── 移动端：侧栏收成抽屉（必须放最后，否则被上面的基础规则覆盖）──────── */
 @media (max-width:820px) {
