@@ -79,6 +79,8 @@ function initTheme() {
 
 // 到站倒计时：按分钟说，一分钟内说「即将到站」，已过站直说
 const mins = (sec) => (sec > 0 ? (sec <= 60 ? '即将到站' : `约 ${Math.round(sec / 60)} 分钟`) : '已过站');
+// 排序键：没有 ETA（已过站 / 上游没给预测）的车排最后
+const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
 
 // 运营状态：上游 state 0 正常 / -1 等待发车 / -2 临时停运 / -3 末班已过
 function stateOf(rt) {
@@ -183,6 +185,8 @@ function renderLines(filter) {
   const hit = routes.filter((r) =>
     !f || r.name.toLowerCase().includes(f) ||
     r.dirs.some((d) => d.start.toLowerCase().includes(f) || d.end.toLowerCase().includes(f)));
+
+  $('#linecnt').textContent = f ? `${hit.length}/${routes.length} 条` : `${routes.length} 条`;
 
   if (!hit.length) {
     ul.append(el('li', 'note', '没有匹配的线路'));
@@ -404,46 +408,94 @@ async function renderMap() {
   hint.hidden = true;
 }
 
-/* ── 到站卡内容 ───────────────────────────────────────────────────── */
+/* ── 侧栏：实时到站 / 本线信息 / 走向条 ───────────────────────────── */
+// 到站卡按 ETA 升序。「还有 N 站」用 target−order：上游没传 targetOrder 时
+// target 就是终点站序。
+function renderArr() {
+  const box = $('#arr');
+  box.textContent = '';
+  if (!detail.length) { box.append(el('div', 'note', '左侧选一条线路。')); return; }
+
+  const it = focusDir();
+  const buses = (it.rt.buses || []).slice().sort((a, b) => etaKey(a) - etaKey(b));
+  if (!buses.length) {
+    const [, txt] = stateOf(it.rt);
+    box.append(el('div', 'note', txt === '运营中' ? `${it.dir.end} 方向暂无在线车辆。` : txt));
+    return;
+  }
+  for (const b of buses) {
+    // 「距终点 N 站」用站表总数减当前站序。上游的 targetOrder 是「下一站」而不是
+    // 终点，拿它减 order 恒为 0（实测三辆车全是「还有 0 站」）。
+    const left = Math.max(0, it.stops.length - b.order);
+    let cls = 'acard';
+    if (!(b.eta > 0)) cls += ' gone';
+    else if (b.eta <= 180) cls += ' soon';
+    const c = el('div', cls);
+
+    const bd = el('span', 'badge', current || '');
+    bd.style.background = lineColor(current || '');
+    c.append(bd);
+
+    const d = el('div', 'dest');
+    d.append(el('b', null, `开往 ${it.dir.end}`));
+    const sub = [`${b.fleetNo} 号车`, left > 0 ? `距终点 ${left} 站` : '已到终点'];
+    if (b.eta > 0 && b.arriveAt) sub.push(`${b.arriveAt} 到`);
+    if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
+    d.append(el('span', null, sub.join(' · ')));
+    c.append(d);
+
+    c.append(el('span', 'eta', mins(b.eta)));
+    box.append(c);
+  }
+}
+
+// 本线信息：两个方向的首末班与票价。票价只有实时接口给（线路静态接口没有）。
+function renderMeta() {
+  const box = $('#meta');
+  box.textContent = '';
+  if (!detail.length) return;
+  for (const it of detail) {
+    box.append(el('div', 'k txt', `${it.dir.start} → ${it.dir.end}`));
+    box.append(el('div', 'v', `${it.dir.firstTime}–${it.dir.lastTime} · ${it.rt.price || '—'}`));
+  }
+  const [cls, txt] = stateOf((detail.find((x) => x.rt.state === 0) || detail[0]).rt);
+  box.append(el('div', 'k txt', '当前状态'));
+  box.append(el('div', 'v txt ' + cls, txt));
+}
+
 function renderCard() {
   const box = $('#businfo');
   box.textContent = '';
   if (!detail.length) { hideCard(); return; }
 
   const it = focusDir();
+  const h = el('div', 'h');
 
-  if (sel) {
-    const s = it.stops.find((x) => x.order === sel.order);
-    if (s) {
-      const h = el('div', 'h');
-      h.append(el('span', 'stn', s.name));
-      h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
-      box.append(h);
-
-      const cached = stopCache.get(`${it.dir.lineId}:${s.order}`);
-      const rows = el('div', 'rows');
-      rows.id = 'rows';
-      if (cached === undefined) rows.append(el('div', 'note', '查询中…'));
-      else fillRows(rows, cached);
-      box.append(rows);
-    }
-  } else {
-    const h = el('div', 'h');
+  if (!sel) {
     h.append(el('span', 'stn', current || '线路'));
     h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
     box.append(h);
-    box.append(el('div', 'note', '点地图上的站点，看车还有多久到。'));
+    box.append(el('div', 'note', '点地图或走向条上的站点，看车还有多久到。'));
+    return;
   }
 
-  box.append(stripEl());
+  const s = it.stops.find((x) => x.order === sel.order);
+  if (!s) return;
+  h.append(el('span', 'stn', s.name));
+  h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
+  box.append(h);
+
+  const cached = stopCache.get(`${it.dir.lineId}:${s.order}`);
+  const rows = el('div', 'rows');
+  rows.id = 'rows';
+  if (cached === undefined) rows.append(el('div', 'note', '查询中…'));
+  else fillRows(rows, cached);
+  box.append(rows);
 }
 
 function fillRows(rows, rt) {
   rows.textContent = '';
-  const buses = (rt.buses || []).slice().sort((a, b) => {
-    const av = a.eta > 0 ? a.eta : Infinity, bv = b.eta > 0 ? b.eta : Infinity;
-    return av - bv;
-  });
+  const buses = (rt.buses || []).slice().sort((a, b) => etaKey(a) - etaKey(b));
   if (!buses.length) {
     rows.append(el('div', 'note', '该方向当前没有在线车辆。'));
     return;
@@ -485,12 +537,13 @@ async function selectStop(it, s) {
   }
 }
 
-/* ── 走向条：两方向共用一条轴，各占一条轨 ───────────────────────────
+/* ── 走向条（侧栏「线路走向」段）：两方向共用一条轴，各占一条轨 ───────
    每轨按自己的行车顺序排；中间站只是大致对齐 —— 22 条线里只有 1 条两方向严格互逆。
    它也是切换地图方向的入口：点另一条轨上的站，地图就切过去。 */
-function stripEl() {
-  const box = el('div', 'sect');
-  box.append(el('h2', null, '线路走向'));
+function renderRails() {
+  const box = $('#rails');
+  box.textContent = '';
+  if (!detail.length) return;
   const nightOn = !!(night && nowMin() >= night.from && nowMin() <= night.to);
   for (const it of detail) {
     const { dir, stops, rt } = it;
@@ -545,7 +598,6 @@ function stripEl() {
     rb.append(scroll);
     box.append(rb);
   }
-  return box;
 }
 
 function busIcon() {
@@ -576,7 +628,7 @@ async function refresh() {
     const [cls, txt] = stateOf((detail.find((it) => it.rt.state === 0) || detail[0]).rt);
     $('#state').className = 'pill ' + cls;
     $('#statetxt').textContent = txt;
-    $('#ts').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    $('#upd').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
 
     $('#hint').hidden = true;
     renderLines($('#q').value);
@@ -586,6 +638,9 @@ async function refresh() {
       if (it && it.stops.some((x) => x.order === sel.order)) await selectStop(it, it.stops.find((x) => x.order === sel.order));
       else sel = null;
     }
+    renderArr();
+    renderMeta();
+    renderRails();
     renderCard();
   } catch (e) {
     $('#state').className = 'pill off';
@@ -627,6 +682,7 @@ async function boot() {
   initDrawer();
   initSheet();
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
+  $('#btnRefresh').addEventListener('click', () => { stopCache.clear(); refresh(); });
   // 点地图空白处取消选中由高德的 map click 处理（见 ensureMap），这里不再重复监听
   try {
     routes = groupByName(await api('/lines'));
