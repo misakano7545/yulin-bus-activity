@@ -296,9 +296,35 @@ async function selectStop(it, s, node, quiet) {
       box.append(el('div', 'note', '该方向当前没有在线车辆。'));
       return;
     }
+
+    // 最近一班：上游只给「还有多久」，把最近那辆提到最显眼（对照车来了 APP 的主卡）
+    const soon = buses.find((b) => b.eta > 0);
+    const isSoon = !!(soon && soon.eta <= 60);
+    const hero = el('div', 'hero');
+    // 注意别写成 'big' + (cond ? ' soon' : null) —— 假分支会拼出 "bignull"
+    const big = el('div', isSoon ? 'big soon' : 'big');
+    if (soon) {
+      big.append(el('span', 'n', isSoon ? '即将' : String(Math.round(soon.eta / 60))));
+      big.append(el('span', 'u', isSoon ? '到站' : '分钟'));
+    } else {
+      big.append(el('span', 'n', '—'));
+      big.append(el('span', 'u', '无来车'));
+    }
+    hero.append(big);
+    const hmeta = el('div', 'hmeta');
+    if (soon) {
+      hmeta.append(el('div', null, `${soon.fleetNo} · 还有 ${s.order - soon.order} 站`));
+      if (soon.arriveAt) hmeta.append(el('div', null, `预计 ${soon.arriveAt}`));
+    } else {
+      hmeta.append(el('div', null, '本方向车辆均已过站'));
+    }
+    hero.append(hmeta);
+    box.append(hero);
+
     for (const b of buses) {
       const r = el('div', 'row');
       r.append(el('span', 'fno', b.fleetNo));
+      if (b.eta > 0) r.append(el('span', 'rem', `还有 ${s.order - b.order} 站`));
       r.append(el('span', 'eta', mins(b.eta)));
       if (b.eta > 0 && b.arriveAt) r.append(el('span', 'at', b.arriveAt));
       box.append(r);
@@ -328,6 +354,10 @@ async function refresh() {
     stopCache.clear();                // 数据变了，到站缓存作废
 
     g.online = detail.reduce((n, it) => n + (it.rt.buses || []).length, 0);
+    // 顶栏摘要：首末班来自线路目录，票价来自详情接口（对照车来了 APP 的副标题行）
+    const d0 = detail[0];
+    $('#sub').textContent = `${d0.dir.start} → ${d0.dir.end} · 首 ${d0.dir.firstTime} 末 ${d0.dir.lastTime}` +
+      (d0.rt.price ? ` · 票价 ${d0.rt.price}` : '');
     const [cls, txt] = stateOf((detail.find((it) => it.rt.state === 0) || detail[0]).rt);
     $('#state').className = 'pill ' + cls;
     $('#statetxt').textContent = txt;
