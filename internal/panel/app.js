@@ -23,6 +23,7 @@ let routes = [];      // 按线路名合并后的 22 条：{name, dirs:[Line,…
 let current = null;   // 当前线路名
 let detail = [];      // 当前线路各方向的 {dir, stops, track, rt}
 let sel = null;       // 选中的站点 {lineId, order}；刷新后要恢复高亮
+let focusId = null;   // 手动切到的方向（lineId）；null = 用第一个方向
 let night = null;     // 本线夜班服务：{stops:Set, from, to}；无夜班则 null
 let timer = null;
 
@@ -123,6 +124,7 @@ function hideCard() { $('#infosect').classList.remove('on'); }
 function deselect() {
   sel = null;
   document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
+  renderMap();     // 地图上的选中态也是 renderMap 画的，不重绘的话站还亮着
   if (isMobile()) hideCard(); else renderCard();
 }
 
@@ -284,6 +286,7 @@ let amap = null;
 let overlay = [];        // 当前线路的覆盖物，重绘前整批摘掉
 let amapLoading = null;  // 首次加载高德脚本的 promise，复用避免重复插 script
 let mapSeq = 0;          // 渲染序号：异步等脚本期间若有更新的渲染排队，这次作废
+let fitted = '';         // 已经 setFitView 过的「线路:方向」；见 renderMap 里为什么需要它
 
 const mapStyle = () => (document.documentElement.dataset.theme === 'light'
   ? 'amap://styles/normal' : 'amap://styles/dark');
@@ -314,6 +317,9 @@ function ensureMap() {
 }
 
 function clearOverlay() {
+  // ponytail: 每次刷新整批摘掉重建覆盖物。几十个 Marker，10 秒一次，暂时不值
+  // 得拆成「站点只建一次、只动车辆」。副作用是刷新瞬间落下的那次点击会落空、
+  // 悬停态被清掉；真要修就把车辆 Marker 单独拎出来只更新 position。
   if (overlay.length) { amap.remove(overlay); overlay = []; }
 }
 
@@ -325,14 +331,45 @@ function stopContent(kind, label) {
 }
 
 /* ── 地图 ─────────────────────────────────────────────────────────── */
-// 只画「当前选中站点所属的方向」；没选中就画第一个方向。
-// 换方向靠点走向条上另一条轨的站点 —— 不再加一套方向切换控件。
+// 线路是双向的，地图与到站列表一次只画一个方向。方向按优先级取：
+// 选中的站（点地图或走向条都会选中）> #dirs 上手动切的方向 > 第一个方向。
 function focusDir() {
-  if (sel) {
-    const d = detail.find((it) => it.dir.lineId === sel.lineId);
+  const want = sel ? sel.lineId : focusId;
+  if (want) {
+    const d = detail.find((it) => it.dir.lineId === want);
     if (d) return d;
   }
   return detail[0];
+}
+
+// 方向切换。没有它就只能靠「点走向条上另一条轨的站」来换向 —— 那个入口
+// 藏在侧栏最底下，等于没有。
+function renderDirs() {
+  const box = $('#dirs');
+  box.textContent = '';
+  if (detail.length < 2) return;   // 单向线没什么可切的
+  const cur = focusDir();
+  for (const it of detail) {
+    const b = el('button', it === cur ? 'on' : null);
+    b.type = 'button';
+    b.append(el('span', 'tt', `开往 ${it.dir.end}`));
+    b.append(el('span', 'ss', `${(it.rt.buses || []).length} 辆`));
+    b.addEventListener('click', () => setFocus(it.dir.lineId));
+    box.append(b);
+  }
+}
+
+function setFocus(lineId) {
+  if (focusId === lineId && !sel) return;
+  focusId = lineId;
+  sel = null;                                   // 选中的站在另一个方向上，不再成立
+  fitted = '';                                  // 换方向要重新定视野
+  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
+  if (isMobile()) hideCard();
+  renderDirs();
+  renderArr();
+  renderMap();
+  renderCard();
 }
 
 async function renderMap() {
@@ -404,7 +441,15 @@ async function renderMap() {
   }
 
   amap.add(overlay);
-  amap.setFitView(overlay, false, [70, 70, 70, 70], 16);
+  // setFitView 只在换线路/换方向时跑一次。每 10 秒刷新都调的话，用户刚拖好、
+  // 缩放好的视野会在下次刷新被拽回去 —— 车在动不等于视野要动。
+  const key = `${current || ''}:${it.dir.lineId}`;
+  if (key !== fitted) {
+    // 第二个参数是 immediately=true：不要动画。实测这台机器上动画要跑 4 秒多，
+    // 期间站点标记一直在移动，点它就是点空 —— 手机上（走隧道）这个窗口更难受。
+    amap.setFitView(overlay, true, [70, 70, 70, 70], 16);
+    fitted = key;
+  }
   hint.hidden = true;
 }
 
@@ -512,10 +557,13 @@ function fillRows(rows, rt) {
 /* ── 选中站点 → 各车到该站还有多久 ───────────────────────────────── */
 async function selectStop(it, s) {
   sel = { lineId: it.dir.lineId, order: s.order };
+  focusId = it.dir.lineId;   // 点哪条轨的站就把方向切过去，与 #dirs 的选中态保持一致
   document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
   document.querySelectorAll(`.rstop[data-line="${it.dir.lineId}"][data-order="${s.order}"]`)
     .forEach((x) => x.classList.add('on'));
   showCard();
+  renderDirs();   // 方向变了，切换器的选中态与到站列表都要跟上
+  renderArr();
   renderMap();
   renderCard();
 
@@ -641,6 +689,7 @@ async function refresh() {
     renderArr();
     renderMeta();
     renderRails();
+    renderDirs();
     renderCard();
   } catch (e) {
     $('#state').className = 'pill off';
@@ -653,6 +702,7 @@ async function refresh() {
 async function select(name) {
   current = name;
   sel = null;
+  focusId = null;         // 换线路后回到第一个方向
   stopCache.clear();
   closeDrawer();          // 移动端选完就收起抽屉
   const g = routes.find((r) => r.name === name);

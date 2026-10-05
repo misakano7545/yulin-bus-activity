@@ -83,6 +83,19 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .lines li.note.bad { color:var(--bad); }
 
 /* ── 实时到站卡（侧栏）─────────────────────────────────────────────── */
+/* 方向切换：线路双向，地图与到站列表一次只画一个方向。
+   竖排整行而不是并排两格 —— 终点站名（「汽车总站（二医院）」）并排放不下会被截。 */
+.dirs { display:flex; flex-direction:column; gap:6px; margin-bottom:9px; }
+.dirs:empty { display:none; }
+.dirs button { display:flex; align-items:center; gap:8px; padding:8px 11px; border-radius:9px;
+  cursor:pointer; background:var(--surface-2); border:1px solid var(--line-soft);
+  color:var(--ink-3); font:12px var(--sans); text-align:left; }
+.dirs button:hover { border-color:var(--ink-3); color:var(--ink-2); }
+.dirs button.on { border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+.dirs .tt { flex:1; min-width:0; font-weight:600; font-size:12.5px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dirs .ss { flex:none; font:600 11px var(--mono); opacity:.85; }
+
 .arr { display:flex; flex-direction:column; gap:7px; }
 .arr .note { color:var(--ink-3); font-size:12.5px; padding:10px 2px; }
 .acard { display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:11px;
@@ -258,6 +271,7 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
     <div class="sidebody">
       <section class="sect">
         <h2>实时到站 <span class="tail" id="upd">—</span></h2>
+        <div class="dirs" id="dirs"></div>
         <div class="arr" id="arr"></div>
       </section>
 
