@@ -93,6 +93,42 @@ function initDrawer() {
   closeDrawer = () => set(false);
 }
 
+/* ── 到站信息面板 ─────────────────────────────────────────────────── */
+// 桌面：内联块，靠 display 显隐。移动端：底部抽屉，靠 transform 滑入滑出。
+let stopCache = new Map();   // `${lineId}:${order}` → 到站数据；每次刷新作废
+
+function showInfo() { $('#infosect').classList.add('on'); }
+function hideInfo() { $('#infosect').classList.remove('on'); }
+
+// 移动端抽屉的拖拽手柄。桌面端 .grab 是 display:none，收不到指针事件。
+function initSheet() {
+  const sheet = $('#infosect'), grab = $('#grab');
+  let y0 = 0, dy = 0, dragging = false;
+
+  grab.addEventListener('pointerdown', (e) => {
+    dragging = true; y0 = e.clientY; dy = 0;
+    grab.setPointerCapture(e.pointerId);
+    sheet.style.transition = 'none';        // 拖动期间跟手，不要缓动
+  });
+  grab.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    dy = Math.max(0, e.clientY - y0);
+    sheet.style.transform = `translateY(${dy}px)`;
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = '';
+    sheet.style.transform = '';
+    if (dy > sheet.getBoundingClientRect().height * 0.3) hideInfo();
+  };
+  grab.addEventListener('pointerup', end);
+  grab.addEventListener('pointercancel', end);
+  grab.addEventListener('keydown', (e) => {  // 键盘可达
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hideInfo(); }
+  });
+}
+
 /* ── 侧栏：按线路名合并方向（46 个方向 → 22 条）────────────────────── */
 // 「6路夜班」并入「6」—— 夜班是同一条线的夜间服务，站表是日班的子集
 const baseName = (n) => n.replace(/路?夜班$/, '');
@@ -234,11 +270,17 @@ async function selectStop(it, s, node, quiet) {
     box.textContent = '';
     box.append(el('div', 'note', '查询中…'));
   }
-  $('#infosect').hidden = false;
+  showInfo();
 
   try {
-    // targetOrder 让上游把 ETA 算到该站，而不是终点站
-    const rt = await api(`/lines/${encodeURIComponent(it.dir.lineId)}/realtime?targetOrder=${s.order}`);
+    // targetOrder 让上游把 ETA 算到该站，而不是终点站。
+    // 同一次刷新周期内重复点站直接吃缓存，不再打接口。
+    const key = `${it.dir.lineId}:${s.order}`;
+    let rt = stopCache.get(key);
+    if (!rt) {
+      rt = await api(`/lines/${encodeURIComponent(it.dir.lineId)}/realtime?targetOrder=${s.order}`);
+      stopCache.set(key, rt);
+    }
     box.textContent = '';
 
     const h = el('div', 'h');
@@ -283,6 +325,7 @@ async function refresh() {
     }));
     if (wanted !== current) return;   // 切线路时丢弃过期响应
     detail = next;
+    stopCache.clear();                // 数据变了，到站缓存作废
 
     g.online = detail.reduce((n, it) => n + (it.rt.buses || []).length, 0);
     const [cls, txt] = stateOf((detail.find((it) => it.rt.state === 0) || detail[0]).rt);
@@ -318,7 +361,7 @@ async function select(name) {
   const g = routes.find((r) => r.name === name);
   $('#title').textContent = name;
   $('#sub').textContent = g ? `${g.dirs[0].start} → ${g.dirs[0].end}` : '';
-  $('#infosect').hidden = true;
+  hideInfo();
   renderLines($('#q').value);
   $('#strip').textContent = '';
   $('#strip').append(el('div', 'note', '加载中…'));
@@ -342,6 +385,7 @@ async function select(name) {
 async function boot() {
   initTheme();
   initDrawer();
+  initSheet();
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
   try {
     routes = groupByName(await api('/lines'));

@@ -85,6 +85,13 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .note.bad { color:var(--bad); }
 .sect { margin-top:20px; }
 .sect h2 { font-size:13px; font-weight:600; color:var(--ink-3); margin-bottom:10px; letter-spacing:.02em; }
+/* 到站信息：桌面内联在走向条下方，没选中站点就整块不显示；
+   移动端在样式表末尾的 @media 里改成底部抽屉，靠 transform 滑入滑出。 */
+#infosect { display:none; }
+#infosect.on { display:block; }
+.grab { display:none; width:38px; height:4px; border-radius:2px; background:var(--line);
+  margin:9px auto 6px; cursor:grab; touch-action:none; }
+.grab:active { cursor:grabbing; }
 
 /* ── 走向条：两方向共用一条轴，各占一条轨 ──────────────────────────
    每轨按自己的行车顺序排；反向轨倒序渲染，端点因此左右对齐。
@@ -159,6 +166,21 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
   /* 手指比鼠标粗：触控目标放大 */
   .rbus { height:22px; padding:0 7px; }
   .lines li { padding:11px; }
+
+  /* 到站信息改成底部抽屉（借 BusOne-Map 的 .sheet）。用 transform 而不是
+     display，否则滑入动画没有过渡。 */
+  #infosect {
+    display:block; position:fixed; left:0; right:0; bottom:0; z-index:15; margin:0;
+    background:var(--surface); border-top:1px solid var(--line);
+    border-radius:14px 14px 0 0; box-shadow:var(--shadow);
+    max-height:62dvh; overflow-y:auto;
+    padding:0 14px calc(14px + env(safe-area-inset-bottom));
+    transform:translateY(100%); transition:transform .22s ease; pointer-events:none;
+  }
+  #infosect.on { transform:none; pointer-events:auto; }
+  #infosect .grab { display:block; }
+  /* 抽屉里去掉卡片自身的底/边框，避免和抽屉描边叠成双层 */
+  #infosect .businfo { background:none; border:0; box-shadow:none; padding:0 0 4px; }
 }
 </style>
 </head>
@@ -196,7 +218,8 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 
     <div class="body">
       <div class="strip" id="strip"><div class="note">左侧选一条线路。</div></div>
-      <section class="sect" id="infosect" hidden>
+      <section class="sect" id="infosect">
+        <div class="grab" id="grab" role="button" tabindex="0" aria-label="收起到站信息"></div>
         <h2>到站信息</h2>
         <div class="businfo" id="businfo"></div>
       </section>
