@@ -4,4 +4,9 @@ js/
 page.html
 city.json
 route.json
+ref/
 __pycache__/
+
+# 构建产物
+/yulin-bus-activity
+/yba
