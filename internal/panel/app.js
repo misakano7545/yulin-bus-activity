@@ -33,6 +33,29 @@ const el = (tag, cls, text) => {
   return n;
 };
 
+/* ── 主题 ─────────────────────────────────────────────────────────── */
+// 三态：auto（默认，跟随系统）→ 手动点过之后记 light/dark。
+// 图标不在这里换，靠 [data-theme] 的 CSS 显隐，少一段拼 innerHTML。
+const LS_THEME = 'bus.theme';
+const mqLight = matchMedia('(prefers-color-scheme: light)');
+let theme = localStorage.getItem(LS_THEME) || 'auto';
+
+function applyTheme() {
+  const eff = theme === 'auto' ? (mqLight.matches ? 'light' : 'dark') : theme;
+  document.documentElement.dataset.theme = eff;
+  $('#btnTheme').title = eff === 'light' ? '切换到深色' : '切换到浅色';
+}
+
+function initTheme() {
+  applyTheme();
+  mqLight.addEventListener('change', () => { if (theme === 'auto') applyTheme(); });
+  $('#btnTheme').addEventListener('click', () => {
+    theme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    localStorage.setItem(LS_THEME, theme);
+    applyTheme();
+  });
+}
+
 // 秒 → 「15分44秒」；到点或已过站返回「—」
 function dur(sec) {
   if (!sec || sec <= 0) return '—';
@@ -176,6 +199,7 @@ async function select(lineId) {
 }
 
 async function boot() {
+  initTheme();
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
   try {
     lines = await api('/lines');
