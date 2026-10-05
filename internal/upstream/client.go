@@ -178,9 +178,58 @@ func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 	for _, pt := range up.Route {
 		rt.Track = append(rt.Track, [3]float64{pt.Lng, pt.Lat, float64(pt.StopOrder)})
 	}
+	rt.Track = applyTrackCutFix(rt.Track, lineID)
 	applyStopPosFix(rt.Track, lineID, rt.Stops)
 	c.cache.put(key, rt, ttlStatic)
 	return rt, nil
+}
+
+// nearestIdx 返回折线上离 (lng,lat) 最近的点下标，从 from 开始找。空折线返回 -1。
+func nearestIdx(track [][3]float64, lng, lat float64, from int) int {
+	best, bestD := -1, math.Inf(1)
+	for i := from; i < len(track); i++ {
+		p := track[i]
+		// 经度按纬度压缩后再比距离，免得把东西向误差算小
+		dx := (p[0] - lng) * math.Cos(lat*math.Pi/180)
+		dy := p[1] - lat
+		if d := dx*dx + dy*dy; d < bestD {
+			best, bestD = i, d
+		}
+	}
+	return best
+}
+
+// trackCutFix 去掉上游折线上的「出去再折返」伪迹：从 A 点绕出去、原路折回 B 点，
+// 中间不经过任何站，画出来就是一段无意义的来回。
+//
+// 实测 G02（玉林北站→玉林汽车总站）出「人民大北路口」后向南绕出 242m 再折返，
+// 来回 349m，之后才右转去汽车总站 —— 实际走向是出站直接右转。
+// ponytail: 逐条列表，不做通用「折返检测」——全城 12 条线都有 300~1300m 的来回段，
+// 那些是真实走向（进终点站绕圈、绕行），通用规则会误删。
+var trackCutFix = map[string][2][2]float64{
+	"0775315346289": { // G02 玉林北站 → 玉林汽车总站
+		{110.144390, 22.628756}, // A：人民大北路口（支线起点）
+		{110.143889, 22.628331}, // B：折返回到主线的点
+	},
+}
+
+// applyTrackCutFix 删掉 A 与 B 之间的折线点（A、B 都保留）。
+func applyTrackCutFix(track [][3]float64, lineID string) [][3]float64 {
+	a, ok := trackCutFix[lineID]
+	if !ok {
+		return track
+	}
+	ia := nearestIdx(track, a[0][0], a[0][1], 0)
+	if ia < 0 {
+		return track
+	}
+	ib := nearestIdx(track, a[1][0], a[1][1], ia+1)
+	if ib <= ia+1 {
+		return track
+	}
+	out := make([][3]float64, 0, len(track)-(ib-ia-1))
+	out = append(out, track[:ia+1]...)
+	return append(out, track[ib:]...)
 }
 
 // stopPosFix 修正「上游把某站标在绕行支线上」的记录。
@@ -208,15 +257,7 @@ func applyStopPosFix(track [][3]float64, lineID string, stops []Stop) {
 		if !ok {
 			continue
 		}
-		best, bestD := -1, math.Inf(1)
-		for i, p := range track {
-			// 经度按纬度压缩后再比距离，免得把东西向误差算小
-			dx := (p[0] - target[0]) * math.Cos(target[1]*math.Pi/180)
-			dy := p[1] - target[1]
-			if d := dx*dx + dy*dy; d < bestD {
-				best, bestD = i, d
-			}
-		}
+		best := nearestIdx(track, target[0], target[1], 0)
 		if best < 0 {
 			continue
 		}

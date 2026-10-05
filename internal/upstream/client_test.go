@@ -136,3 +136,31 @@ func TestApplyStopPosFix(t *testing.T) {
 		}
 	}
 }
+
+// applyTrackCutFix：去掉「出去再折返」的伪迹段，A、B 两点都保留，其余线路不动。
+func TestApplyTrackCutFix(t *testing.T) {
+	track := [][3]float64{
+		{110.145000, 22.629000, 28}, // 0 站前
+		{110.144390, 22.628756, 29}, // 1 A：人民大北路口
+		{110.143778, 22.628384, 0},  // 2 ┐
+		{110.142392, 22.627607, 0},  // 3 │ 出去再折返的伪迹
+		{110.143403, 22.628070, 0},  // 4 ┘
+		{110.143889, 22.628331, 0},  // 5 B：回到主线
+		{110.142830, 22.628905, 30}, // 6 转向汽车总站
+	}
+	got := applyTrackCutFix(track, "0775315346289")
+	want := [][3]float64{track[0], track[1], track[5], track[6]}
+	if len(got) != len(want) {
+		t.Fatalf("折线点数 = %d，期望 %d：%v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("idx%d = %v，期望 %v", i, got[i], want[i])
+		}
+	}
+
+	// 修正表里没有的线路原样返回
+	if other := applyTrackCutFix(track, "775200849296"); len(other) != len(track) {
+		t.Fatalf("无关线路被改动：%d -> %d 点", len(track), len(other))
+	}
+}
