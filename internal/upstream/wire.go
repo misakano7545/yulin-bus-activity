@@ -45,6 +45,7 @@ type wireRoute struct {
 type wireBus struct {
 	Licence string  `json:"licence"`
 	BusID   string  `json:"busId"`
+	State   int     `json:"state"` // 0 在途，1 已到站（H5 的 BUS_STATE）
 	Lat     float64 `json:"lat"`
 	Lng     float64 `json:"lng"`
 	Order   int     `json:"order"`

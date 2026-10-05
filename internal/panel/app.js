@@ -165,12 +165,12 @@ function railEl(it, nightOn) {
     for (const b of (byOrder.get(s.order) || [])) {
       const chip = el('span', 'rbus');   // 只是标记，点击冒泡到站点
       chip.append(busIcon(), el('span', null, b.fleetNo));
-      const next = stops[i + 1];
-      chip.title = next
-        ? `${b.fleetNo} · ${s.name} → ${next.name} 之间`
-        : `${b.fleetNo} · 当前第 ${s.order} 站`;
-      // pos 是车在「上一站 → 本站」上的比例（1=在本站圆点，0=在上一站圆点）。
-      // 上游只给「正在接近的站」，车其实在两站之间，位移过去才是真实位置。
+      // pos 是车在「上一站 → 本站」上的比例：1 = 已到本站（钉在圆点上，与站名对齐），
+      // <1 = 在途（插在两站之间）。上游 order 给的是正在接近的站。
+      const prev = stops[i - 1];
+      chip.title = b.pos >= 1
+        ? `${b.fleetNo} · 已到 ${s.name}`
+        : `${b.fleetNo} · ${prev ? prev.name : '起点'} → ${s.name} 之间`;
       if (b.pos < 1) chip.style.transform = `translateX(${((b.pos - 1) * PITCH).toFixed(1)}px)`;
       wrap.append(chip);
     }

@@ -36,6 +36,9 @@ const (
 
 	ttlRealtime = 5 * time.Second
 	ttlStatic   = time.Hour
+
+	// 上游 bus.state：0 在途，1 已到站（对应 H5 的 BUS_STATE）
+	busStateArrived = 1
 )
 
 type Client struct {
@@ -220,12 +223,14 @@ func (c *Client) Realtime(ctx context.Context, lineID string, targetOrder int) (
 	for _, b := range up.Buses {
 		no, confident := c.plates.FleetNo(b.Licence)
 
-		// 上游 order 是「正在接近的站」，车其实在 order-1 与 order 之间；
-		// 取不到前站或坐标时退回 1，即画在 order 站圆点上。
+		// 上游 order 是「正在接近的站」：在途时车在 order-1 与 order 之间，
+		// 用投影比例插值；已到站（state=1）则钉在 order 站圆点上，与站名对齐。
 		pos := 1.0
-		if prev, ok := byOrder[b.Order-1]; ok {
-			if p, ok := segPos(b.Lat, b.Lng, prev, byOrder[b.Order]); ok {
-				pos = p
+		if b.State != busStateArrived {
+			if prev, ok := byOrder[b.Order-1]; ok {
+				if p, ok := segPos(b.Lat, b.Lng, prev, byOrder[b.Order]); ok {
+					pos = p
+				}
 			}
 		}
 
