@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/aes"
 	"encoding/base64"
+	"math"
 	"testing"
 )
 
@@ -37,6 +38,35 @@ func TestDecryptECBRejectsGarbage(t *testing.T) {
 	}
 	if _, err := decryptECB(base64.StdEncoding.EncodeToString([]byte("short"))); err == nil {
 		t.Fatal("非块对齐的密文应当报错")
+	}
+}
+
+// 车辆在两站之间的插值比例。车与站同为 WGS 基准。
+func TestSegPos(t *testing.T) {
+	a := wireStop{Order: 1, WgsLat: 22.60, WgsLng: 110.15}
+	b := wireStop{Order: 2, WgsLat: 22.61, WgsLng: 110.15}
+	mid := (a.WgsLat + b.WgsLat) / 2
+
+	cases := []struct {
+		name     string
+		lat, lng float64
+		p, q     wireStop
+		want     float64
+		ok       bool
+	}{
+		{"在起点站", a.WgsLat, a.WgsLng, a, b, 0, true},
+		{"在终点站", b.WgsLat, b.WgsLng, a, b, 1, true},
+		{"正中", mid, a.WgsLng, a, b, 0.5, true},
+		{"越过终点夹到 1", b.WgsLat + 0.1, b.WgsLng, a, b, 1, true},
+		{"退回起点前夹到 0", a.WgsLat - 0.1, a.WgsLng, a, b, 0, true},
+		{"站缺坐标 → 不可用", mid, a.WgsLng, a, wireStop{Order: 3}, 0, false},
+		{"车缺坐标 → 不可用", 0, 0, a, b, 0, false},
+	}
+	for _, c := range cases {
+		got, ok := segPos(c.lat, c.lng, c.p, c.q)
+		if ok != c.ok || (ok && math.Abs(got-c.want) > 1e-6) {
+			t.Errorf("%s: segPos = (%v,%v), want (%v,%v)", c.name, got, ok, c.want, c.ok)
+		}
 	}
 }
 

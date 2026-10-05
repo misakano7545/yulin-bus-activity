@@ -11,6 +11,7 @@
 
 const $ = (s) => document.querySelector(s);
 const REFRESH_MS = 10000;
+const PITCH = 64;     // 一站的像素宽，必须与 CSS 里 .rstop 的 width 一致
 
 let routes = [];      // 按线路名合并后的 23 条：{name, dirs:[Line,…]}
 let current = null;   // 当前线路名
@@ -164,7 +165,13 @@ function railEl(it, nightOn) {
     for (const b of (byOrder.get(s.order) || [])) {
       const chip = el('span', 'rbus');   // 只是标记，点击冒泡到站点
       chip.append(busIcon(), el('span', null, b.fleetNo));
-      chip.title = `${b.fleetNo} · 当前第 ${s.order} 站`;
+      const next = stops[i + 1];
+      chip.title = next
+        ? `${b.fleetNo} · ${s.name} → ${next.name} 之间`
+        : `${b.fleetNo} · 当前第 ${s.order} 站`;
+      // pos 是车在「上一站 → 本站」上的比例（1=在本站圆点，0=在上一站圆点）。
+      // 上游只给「正在接近的站」，车其实在两站之间，位移过去才是真实位置。
+      if (b.pos < 1) chip.style.transform = `translateX(${((b.pos - 1) * PITCH).toFixed(1)}px)`;
       wrap.append(chip);
     }
     st.append(wrap);

@@ -12,11 +12,13 @@ type wireLine struct {
 }
 
 type wireStop struct {
-	SID   string  `json:"sId"`
-	SN    string  `json:"sn"`
-	Order int     `json:"order"`
-	Lat   float64 `json:"lat"`
-	Lng   float64 `json:"lng"`
+	SID    string  `json:"sId"`
+	SN     string  `json:"sn"`
+	Order  int     `json:"order"`
+	Lat    float64 `json:"lat"`    // bd 基准
+	Lng    float64 `json:"lng"`    // bd 基准
+	WgsLat float64 `json:"wgsLat"` // 与车辆 lat/lng 同基准
+	WgsLng float64 `json:"wgsLng"`
 }
 
 type wirePoint struct {
@@ -54,7 +56,8 @@ type wireBus struct {
 }
 
 type wireDetail struct {
-	Line   wireMeta  `json:"line"`
-	Buses  []wireBus `json:"buses"`
-	Target int       `json:"targetOrder"`
+	Line     wireMeta   `json:"line"`
+	Stations []wireStop `json:"stations"`
+	Buses    []wireBus  `json:"buses"`
+	Target   int        `json:"targetOrder"`
 }

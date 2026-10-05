@@ -34,17 +34,21 @@ type Route struct {
 
 // Bus 是归一化后的实时车辆。
 type Bus struct {
-	FleetNo    string    `json:"fleetNo"`    // 自编号
-	RawID      string    `json:"rawId"`      // 上游 licence 原值（自编号或车牌）
-	Confidence string    `json:"confidence"` // high=自编号可信；low=未知车牌，原样透出
-	LineID     string    `json:"lineId"`
-	Lat        float64   `json:"lat"`
-	Lng        float64   `json:"lng"`
-	Order      int       `json:"order"`       // 当前站序
-	Target     int       `json:"targetOrder"` // 目标站序
-	ETA        int       `json:"eta"`         // 到目标站秒数
-	ArriveAt   string    `json:"arriveAt"`    // 到目标站时刻 HH:MM
-	UpdatedAt  time.Time `json:"updatedAt"`
+	FleetNo    string  `json:"fleetNo"`    // 自编号
+	RawID      string  `json:"rawId"`      // 上游 licence 原值（自编号或车牌）
+	Confidence string  `json:"confidence"` // high=自编号可信；low=未知车牌，原样透出
+	LineID     string  `json:"lineId"`
+	Lat        float64 `json:"lat"`
+	Lng        float64 `json:"lng"`
+	Order      int     `json:"order"`       // 当前站序
+	Target     int     `json:"targetOrder"` // 目标站序
+	ETA        int     `json:"eta"`         // 到目标站秒数
+	ArriveAt   string  `json:"arriveAt"`    // 到目标站时刻 HH:MM
+	// Pos 是车在「order-1 站 → order 站」这一段上的位置比例：1=在 order 站圆点上，
+	// 0=在上一站圆点上。上游 order 给的是「正在接近的站」，车实际在两站之间；
+	// 用它把图标画在两点中间而不是钉在圆点上。取不到坐标时恒为 1。
+	Pos       float64   `json:"pos"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Realtime 是一条线的实时快照。

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -209,11 +210,29 @@ func (c *Client) Realtime(ctx context.Context, lineID string, targetOrder int) (
 
 	now := time.Now()
 	rt := &Realtime{LineID: up.Line.LineID, Price: up.Line.Price, State: up.Line.State, Desc: up.Line.Desc, Buses: []Bus{}}
+
+	// 站序索引：算车辆在两站之间的位置用（车 lat/lng 与站 wgsLat/wgsLng 同基准）
+	byOrder := make(map[int]wireStop, len(up.Stations))
+	for _, s := range up.Stations {
+		byOrder[s.Order] = s
+	}
+
 	for _, b := range up.Buses {
 		no, confident := c.plates.FleetNo(b.Licence)
+
+		// 上游 order 是「正在接近的站」，车其实在 order-1 与 order 之间；
+		// 取不到前站或坐标时退回 1，即画在 order 站圆点上。
+		pos := 1.0
+		if prev, ok := byOrder[b.Order-1]; ok {
+			if p, ok := segPos(b.Lat, b.Lng, prev, byOrder[b.Order]); ok {
+				pos = p
+			}
+		}
+
 		bus := Bus{
 			FleetNo: no, RawID: b.Licence, LineID: lineID, Confidence: "high",
 			Lat: b.Lat, Lng: b.Lng, Order: b.Order, Target: up.Target, UpdatedAt: now,
+			Pos: pos,
 		}
 		if !confident {
 			bus.Confidence = "low"
@@ -227,6 +246,31 @@ func (c *Client) Realtime(ctx context.Context, lineID string, targetOrder int) (
 	}
 	c.cache.put(key, rt, ttlRealtime)
 	return rt, nil
+}
+
+// segPos 返回车在 a→b 这一段上的投影比例，夹在 [0,1]；坐标缺失时 ok=false。
+// 车与站同在 WGS 基准（站的 bd 坐标与车差一个偏移，不能用）。
+func segPos(lat, lng float64, a, b wireStop) (float64, bool) {
+	if lat == 0 || lng == 0 || a.WgsLat == 0 || b.WgsLat == 0 {
+		return 0, false
+	}
+	// ponytail: 一站之内的尺度把经纬度当平面；经度按 cos(纬度) 缩放即可
+	k := math.Cos(lat * math.Pi / 180)
+	ax, ay := a.WgsLng*k, a.WgsLat
+	bx, by := b.WgsLng*k, b.WgsLat
+	dx, dy := bx-ax, by-ay
+	dd := dx*dx + dy*dy
+	if dd == 0 {
+		return 0, false
+	}
+	t := ((lng*k-ax)*dx + (lat-ay)*dy) / dd
+	switch {
+	case t < 0:
+		return 0, true
+	case t > 1:
+		return 1, true
+	}
+	return t, true
 }
 
 // cryptoSign 是 H5 的签名：JSON 去掉最外层 {}，':'->'=' ','->'&'，追加固定盐，取 MD5。
