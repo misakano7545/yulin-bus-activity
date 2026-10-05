@@ -70,6 +70,20 @@ func TestSegPos(t *testing.T) {
 	}
 }
 
+// 上游站名笔误修正：命中才替换，未命中原样返回。
+func TestFixStopName(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"高新产业园（玉林职业技术学院））", "高新产业园（玉林职业技术学院）"},
+		{"高新产业园（玉林职业技术学院）", "高新产业园（玉林职业技术学院）"}, // 正确写法不动
+		{"玉林火车站", "玉林火车站"},
+	}
+	for _, c := range cases {
+		if got := fixStopName(c.in); got != c.want {
+			t.Errorf("fixStopName(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func encryptECB(t *testing.T, plain []byte) string {
 	t.Helper()
 	block, err := aes.NewCipher([]byte(aesKey))

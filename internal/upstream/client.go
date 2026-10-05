@@ -137,6 +137,20 @@ func (c *Client) Lines(ctx context.Context) ([]Line, error) {
 	return lines, nil
 }
 
+// stopNameFix 上游站名笔误修正。目前只有一条：G02路定制某方向的
+// 「高新产业园（玉林职业技术学院）」多了一个右括号。
+// ponytail: 单条映射，不做「去掉重复右括号」的通用规则 —— 那会误伤合法的嵌套括号。
+var stopNameFix = map[string]string{
+	"高新产业园（玉林职业技术学院））": "高新产业园（玉林职业技术学院）",
+}
+
+func fixStopName(s string) string {
+	if v, ok := stopNameFix[s]; ok {
+		return v
+	}
+	return s
+}
+
 // Route 返回站点序列与走向折线（明文接口）。
 func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 	key := "route:" + lineID
@@ -159,7 +173,7 @@ func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 		Track: make([][2]float64, 0, len(up.Route)),
 	}
 	for _, s := range up.Stations {
-		rt.Stops = append(rt.Stops, Stop{ID: s.SID, Name: s.SN, Order: s.Order, Lat: s.Lat, Lng: s.Lng})
+		rt.Stops = append(rt.Stops, Stop{ID: s.SID, Name: fixStopName(s.SN), Order: s.Order, Lat: s.Lat, Lng: s.Lng})
 	}
 	for _, pt := range up.Route {
 		rt.Track = append(rt.Track, [2]float64{pt.Lng, pt.Lat})
