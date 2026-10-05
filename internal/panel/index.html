@@ -57,8 +57,8 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .lines .no { font-family:var(--mono); font-weight:600; min-width:56px; flex:none; }
 .lines .to { color:var(--ink-3); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lines li.on .to { color:var(--accent); opacity:.75; }
-.lines .dot { width:5px; height:5px; border-radius:50%; flex:none; margin-left:auto; }
-.dot.run { background:var(--ok); } .dot.idle { background:var(--ink-3); } .dot.off { background:var(--bad); }
+.lines .n { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--ok); flex:none; }
+.lines .n.zero { color:var(--ink-3); }
 
 /* ── 主区 ──────────────────────────────────────────────────────────── */
 .main { display:flex; flex-direction:column; min-width:0; }
@@ -78,33 +78,59 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 [data-theme="light"] .ico-moon { display:none; }
 
 .body { padding:18px 22px 40px; }
-.card { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); overflow:hidden; }
 .note { padding:14px 16px; color:var(--ink-3); font-size:13px; }
 .note.bad { color:var(--bad); }
-
-/* ── 站点时间轴 ────────────────────────────────────────────────────── */
-.stops { list-style:none; }
-.stops li { display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid var(--line-soft); position:relative; }
-.stops li:last-child { border-bottom:0; }
-.stops .ord { font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink-3); font-size:11.5px; width:22px; text-align:right; flex:none; }
-.stops .rail { position:absolute; left:54px; top:0; bottom:0; width:1px; background:var(--line); }
-.stops .pin { width:9px; height:9px; border-radius:50%; border:2px solid var(--line); background:var(--surface); flex:none; z-index:1; }
-.stops li.term .pin { border-color:var(--accent); }
-.stops .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.stops .bus { display:inline-flex; align-items:center; gap:7px; background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:2px 9px; font-size:12px; font-weight:550; flex:none; }
-.stops .bus .fno { font-family:var(--mono); }
-.stops .bus .eta { color:var(--ink-2); font-weight:450; }
-
-/* ── 车辆总览 ──────────────────────────────────────────────────────── */
-.buses { display:grid; gap:8px; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); }
-.buscard { background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:12px 14px; }
-.buscard .h { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
-.buscard .fno { font-family:var(--mono); font-size:17px; font-weight:650; }
-.buscard .pl { color:var(--ink-3); font-size:11.5px; font-family:var(--mono); }
-.buscard .row { display:flex; justify-content:space-between; gap:10px; color:var(--ink-2); font-size:12.5px; padding:2px 0; }
-.buscard .row b { font-weight:550; color:var(--ink); font-family:var(--mono); font-variant-numeric:tabular-nums; }
-.sect { margin-top:22px; }
+.sect { margin-top:20px; }
 .sect h2 { font-size:13px; font-weight:600; color:var(--ink-3); margin-bottom:10px; letter-spacing:.02em; }
+
+/* ── 走向条：两方向共用一条轴，各占一条轨 ──────────────────────────
+   每轨按自己的行车顺序排；反向轨倒序渲染，端点因此左右对齐。
+   中间站只是大致对齐 —— 23 条线里只有 1 条两方向严格互逆，其余站表不同。 */
+.strip { display:flex; flex-direction:column; gap:14px; }
+.railbox { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); }
+.railhead { display:flex; align-items:center; gap:9px; padding:11px 16px; border-bottom:1px solid var(--line-soft); font-size:13px; flex-wrap:wrap; }
+.railhead .arrow { color:var(--accent); font-family:var(--mono); font-size:15px; }
+.railhead .dir { font-weight:600; }
+.railhead .st { font-size:11.5px; padding:2px 8px; border-radius:999px; }
+.railhead .st.run { background:var(--ok-soft); color:var(--ok); }
+.railhead .st.idle { background:var(--warn-soft); color:var(--warn); }
+.railhead .st.off { background:var(--bad-soft); color:var(--bad); }
+.railhead .cnt { color:var(--ink-3); font-size:12px; margin-left:auto; font-family:var(--mono); }
+
+.railscroll { overflow-x:auto; padding:14px 16px 6px; }
+.rail { display:flex; align-items:flex-start; min-width:min-content; }
+/* 站名横排。不用 writing-mode:vertical-rl —— 实测无头 Chromium 缺竖排字体度量，
+   字会挤成墨团（高度 0），且真实浏览器行为无法在此验证。 */
+.rstop { position:relative; flex:0 0 auto; width:64px; display:flex; flex-direction:column; align-items:center; }
+.rstop::before { content:''; position:absolute; left:0; right:0; top:44px; height:2px; background:var(--accent); opacity:.45; }
+.rstop .dot { position:relative; z-index:1; width:9px; height:9px; border-radius:50%; background:var(--surface); border:2px solid var(--accent); }
+.rstop.term .dot { background:var(--accent); }
+.rstop .nm { margin-top:6px; font-size:11px; line-height:1.35; color:var(--ink-2); text-align:center;
+  height:2.7em; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  text-wrap:balance; }
+.rstop.term .nm { font-weight:650; color:var(--ink); }
+/* 车辆图标区固定高度，各站圆点才落在同一条 y 上 */
+.rbuswrap { height:40px; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; }
+.railcap { flex:0 0 auto; width:12px; height:40px; position:relative; }
+.railcap::before { content:''; position:absolute; top:39px; width:0; height:0; border-top:6px solid transparent; border-bottom:6px solid transparent; }
+.railcap.r::before { left:0; border-left:9px solid var(--accent); }
+.railcap.l::before { right:0; border-right:9px solid var(--accent); }
+
+.rbus { display:inline-flex; align-items:center; gap:3px; height:18px; padding:0 5px; border-radius:5px;
+  background:var(--accent); color:var(--accent-ink); border:0; cursor:pointer; font:600 10.5px var(--mono); }
+.rbus:hover { filter:brightness(1.15); }
+.rbus.on { outline:2px solid var(--accent); outline-offset:2px; }
+.rbus svg { width:10px; height:10px; flex:none; }
+
+/* ── 车辆信息 ──────────────────────────────────────────────────────── */
+.businfo { background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:14px 16px; }
+.businfo .h { display:flex; align-items:baseline; gap:9px; margin-bottom:9px; flex-wrap:wrap; }
+.businfo .fno { font-family:var(--mono); font-size:19px; font-weight:650; }
+.businfo .pl { color:var(--ink-3); font-size:11.5px; font-family:var(--mono); }
+.businfo .dir { color:var(--ink-3); font-size:12px; margin-left:auto; }
+.businfo .row { display:flex; gap:12px; padding:3px 0; font-size:13px; color:var(--ink-2); }
+.businfo .row span { flex:0 0 42px; color:var(--ink-3); }
+.businfo .row b { font-weight:550; color:var(--ink); }
 </style>
 </head>
 <body>
@@ -136,10 +162,10 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
     </header>
 
     <div class="body">
-      <div class="card" id="stopcard"><div class="note">左侧选一条线路。</div></div>
-      <section class="sect" id="bussect" hidden>
-        <h2>在线车辆</h2>
-        <div class="buses" id="buses"></div>
+      <div class="strip" id="strip"><div class="note">左侧选一条线路。</div></div>
+      <section class="sect" id="infosect" hidden>
+        <h2>车辆信息</h2>
+        <div class="businfo" id="businfo"></div>
       </section>
     </div>
   </main>
