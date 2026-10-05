@@ -368,9 +368,10 @@ function setFocus(lineId) {
   fitted = '';                                  // 换方向要重新定视野
   document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
   if (isMobile()) hideCard();
+  renderShifts();   // 班次按钮上的起讫时间也跟着方向
   renderDirs();
   renderArr();
-  renderMeta();   // 首末班跟着方向走
+  renderMeta();     // 首末班跟着方向走
   renderMap();
   renderCard();
 }
@@ -390,20 +391,29 @@ function renderShifts() {
   box.textContent = '';
   const g = routes.find((r) => r.name === current);
   if (!g || !g.night.length) return;
+  const end = focusDir().dir.end;   // 按钮上的起讫时间跟着当前方向走
 
   for (const [k, label, ls] of [['day', '日班', g.dirs], ['night', '夜班', g.night]]) {
     const b = el('button', shift === k ? 'on' : null);
     b.type = 'button';
     b.append(el('span', 'tt', label));
-    b.append(el('span', 'ss', spanOf(ls)));
+    b.append(el('span', 'ss', spanOf(ls, end)));
     b.addEventListener('click', () => setShift(k));
     box.append(b);
   }
 }
 
 const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-const spanOf = (ls) => `${hhmm(Math.min(...ls.map((d) => hm(d.firstTime))))}–` +
-                       `${hhmm(Math.max(...ls.map((d) => hm(d.lastTime))))}`;
+
+// 班次的起讫时间。优先取「终点与当前方向相同」的那条 —— 日班和夜班的方向集合
+// 不一样（夜班只开到马尔代夫水上乐园），按序号对不上同一走向，只能按终点名找；
+// 该班次没有这个走向就退回整班次的并集。
+function spanOf(ls, end) {
+  const same = ls.filter((d) => d.end === end);
+  const use = same.length ? same : ls;
+  return `${hhmm(Math.min(...use.map((d) => hm(d.firstTime))))}–` +
+         `${hhmm(Math.max(...use.map((d) => hm(d.lastTime))))}`;
+}
 
 function setShift(s) {
   if (shift === s || !shifts[s].length) return;
@@ -617,6 +627,7 @@ async function selectStop(it, s) {
   document.querySelectorAll(`.rstop[data-line="${it.dir.lineId}"][data-order="${s.order}"]`)
     .forEach((x) => x.classList.add('on'));
   showCard();
+  renderShifts();
   renderDirs();   // 方向变了，切换器的选中态与到站列表都要跟上
   renderArr();
   renderMeta();
