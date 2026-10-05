@@ -1,0 +1,60 @@
+package upstream
+
+// 上游报文结构。只在本包内用，不导出 —— 对外一律走 model.go 的归一化类型。
+
+type wireLine struct {
+	LineID    string `json:"lineId"`
+	LineName  string `json:"lineName"`
+	StartStop string `json:"startStopName"`
+	EndStop   string `json:"endStopName"`
+	FirstTime string `json:"firstTime"`
+	LastTime  string `json:"lastTime"`
+}
+
+type wireStop struct {
+	SID   string  `json:"sId"`
+	SN    string  `json:"sn"`
+	Order int     `json:"order"`
+	Lat   float64 `json:"lat"`
+	Lng   float64 `json:"lng"`
+}
+
+type wirePoint struct {
+	Lng float64 `json:"lng"`
+	Lat float64 `json:"lat"`
+}
+
+type wireMeta struct {
+	LineID  string `json:"lineId"`
+	Name    string `json:"name"`
+	Price   string `json:"price"`
+	State   int    `json:"state"`
+	Desc    string `json:"desc"`
+	StartSn string `json:"startSn"`
+	EndSn   string `json:"endSn"`
+}
+
+type wireRoute struct {
+	Route    []wirePoint `json:"route"`
+	Stations []wireStop  `json:"stations"`
+	Line     wireMeta    `json:"line"`
+}
+
+type wireBus struct {
+	Licence string  `json:"licence"`
+	BusID   string  `json:"busId"`
+	Lat     float64 `json:"lat"`
+	Lng     float64 `json:"lng"`
+	Order   int     `json:"order"`
+	Travels []struct {
+		Order      int    `json:"order"`
+		TravelTime int    `json:"travelTime"`
+		RecommTip  string `json:"recommTip"`
+	} `json:"travels"`
+}
+
+type wireDetail struct {
+	Line   wireMeta  `json:"line"`
+	Buses  []wireBus `json:"buses"`
+	Target int       `json:"targetOrder"`
+}

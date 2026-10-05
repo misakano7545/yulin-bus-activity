@@ -1,4 +1,9 @@
-package main
+// Package upstream 是车来了（Chelaile）H5 数据面的客户端。
+//
+// 两个参数缺一个就静默返假数据，不是报错：
+//   - s=h5  每个 /api 调用都要带，少了返回空 body
+//   - src   实时接口要带，少了全城 state=-1「等待发车」、buses 恒空
+package upstream
 
 import (
 	"context"
@@ -14,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/misakano7545/yulin-bus-activity/internal/plate"
 )
 
 const (
@@ -29,77 +36,21 @@ const (
 	ttlStatic   = time.Hour
 )
 
-// ─── 上游报文 ───
-
-type upstreamLine struct {
-	LineID    string `json:"lineId"`
-	LineName  string `json:"lineName"`
-	StartStop string `json:"startStopName"`
-	EndStop   string `json:"endStopName"`
-	FirstTime string `json:"firstTime"`
-	LastTime  string `json:"lastTime"`
-}
-
-type upstreamStop struct {
-	SID   string  `json:"sId"`
-	SN    string  `json:"sn"`
-	Order int     `json:"order"`
-	Lat   float64 `json:"lat"`
-	Lng   float64 `json:"lng"`
-}
-
-type upstreamPoint struct {
-	Lng float64 `json:"lng"`
-	Lat float64 `json:"lat"`
-}
-
-type upstreamMeta struct {
-	LineID  string `json:"lineId"`
-	Name    string `json:"name"`
-	Price   string `json:"price"`
-	State   int    `json:"state"`
-	Desc    string `json:"desc"`
-	StartSn string `json:"startSn"`
-	EndSn   string `json:"endSn"`
-}
-
-type upstreamRoute struct {
-	Route    []upstreamPoint `json:"route"`
-	Stations []upstreamStop  `json:"stations"`
-	Line     upstreamMeta    `json:"line"`
-}
-
-type upstreamBus struct {
-	Licence string  `json:"licence"`
-	BusID   string  `json:"busId"`
-	Lat     float64 `json:"lat"`
-	Lng     float64 `json:"lng"`
-	Order   int     `json:"order"`
-	Travels []struct {
-		Order      int    `json:"order"`
-		TravelTime int    `json:"travelTime"`
-		RecommTip  string `json:"recommTip"`
-	} `json:"travels"`
-}
-
-type upstreamDetail struct {
-	Line   upstreamMeta  `json:"line"`
-	Buses  []upstreamBus `json:"buses"`
-	Target int           `json:"targetOrder"`
-}
-
-// ─── 客户端 ───
-
 type Client struct {
-	http  *http.Client
-	cache *cache
+	http   *http.Client
+	plates *plate.Table
+	cache  *cache
 }
 
-func NewClient() *Client {
-	return &Client{http: &http.Client{Timeout: 15 * time.Second}, cache: newCache()}
+func New(plates *plate.Table) *Client {
+	return &Client{
+		http:   &http.Client{Timeout: 15 * time.Second},
+		plates: plates,
+		cache:  newCache(),
+	}
 }
 
-// baseParams：s=h5 每个请求都必须带；src 不带就全城「等待发车」、buses 恒为空。
+// baseParams：s=h5 每个请求都必须带；src 决定实时接口有没有数据。
 func baseParams() url.Values {
 	return url.Values{
 		"s": {"h5"}, "v": {clientVer}, "vc": {"1"}, "sign": {"1"},
@@ -163,7 +114,7 @@ func (c *Client) Lines(ctx context.Context) ([]Line, error) {
 	}
 	var wrap struct {
 		AllLines struct {
-			All []upstreamLine `json:"all"`
+			All []wireLine `json:"all"`
 		} `json:"allLines"`
 	}
 	if err := json.Unmarshal(data, &wrap); err != nil {
@@ -193,7 +144,7 @@ func (c *Client) Route(ctx context.Context, lineID string) (*Route, error) {
 	if err != nil {
 		return nil, err
 	}
-	var up upstreamRoute
+	var up wireRoute
 	if err := json.Unmarshal(data, &up); err != nil {
 		return nil, err
 	}
@@ -240,7 +191,7 @@ func (c *Client) Realtime(ctx context.Context, lineID string) (*Realtime, error)
 	if err != nil {
 		return nil, err
 	}
-	var up upstreamDetail
+	var up wireDetail
 	if err := json.Unmarshal(plain, &up); err != nil {
 		return nil, err
 	}
@@ -248,7 +199,7 @@ func (c *Client) Realtime(ctx context.Context, lineID string) (*Realtime, error)
 	now := time.Now()
 	rt := &Realtime{LineID: up.Line.LineID, Price: up.Line.Price, State: up.Line.State, Desc: up.Line.Desc, Buses: []Bus{}}
 	for _, b := range up.Buses {
-		no, confident := fleetNo(b.Licence)
+		no, confident := c.plates.FleetNo(b.Licence)
 		bus := Bus{
 			FleetNo: no, RawID: b.Licence, LineID: lineID, Confidence: "high",
 			Lat: b.Lat, Lng: b.Lng, Order: b.Order, Target: up.Target, UpdatedAt: now,

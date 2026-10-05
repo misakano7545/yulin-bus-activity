@@ -1,4 +1,4 @@
-package main
+package upstream
 
 import "time"
 
@@ -22,6 +22,7 @@ type Stop struct {
 }
 
 // Route 是一条线的静态信息：站点序列 + 走向折线。
+//
 // ponytail: lineRoute 的 line 对象只有 lineId+name，票价/状态/描述都在详情接口里，
 // 所以这里不放那几个字段（放了恒为空，比没有更糟）。
 type Route struct {
@@ -31,7 +32,7 @@ type Route struct {
 	Track  [][2]float64 `json:"track"` // [lng, lat]
 }
 
-// Bus 是统一后的实时车辆。
+// Bus 是归一化后的实时车辆。
 type Bus struct {
 	FleetNo    string    `json:"fleetNo"`    // 自编号
 	RawID      string    `json:"rawId"`      // 上游 licence 原值（自编号或车牌）
