@@ -40,7 +40,8 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 
 /* ── 壳层 ──────────────────────────────────────────────────────────── */
 .shell { display:grid; grid-template-columns:250px 1fr; min-height:100vh; }
-@media (max-width:820px) { .shell { grid-template-columns:1fr; } .side { height:auto !important; position:static !important; } }
+/* 移动端抽屉相关的默认值；@media 块在样式表末尾，避免被后面的基础规则覆盖 */
+.scrim { display:none; }
 
 .side { background:var(--surface); border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
 .brand { padding:18px 16px 14px; border-bottom:1px solid var(--line-soft); }
@@ -73,6 +74,8 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .live { width:6px; height:6px; border-radius:50%; background:var(--ok); }
 .iconbtn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:7px; background:var(--surface-2); border:1px solid var(--line); color:var(--ink-2); cursor:pointer; padding:0; }
 .iconbtn:hover { color:var(--ink); border-color:var(--ink-3); }
+/* 必须用两个类：.iconbtn 的 display 在后面且同优先级，单类 .menubtn 会被它盖掉 */
+.iconbtn.menubtn { display:none; }
 /* 图标跟着主题走，省掉 JS 换 innerHTML */
 [data-theme="dark"] .ico-sun { display:none; }
 [data-theme="light"] .ico-moon { display:none; }
@@ -137,6 +140,26 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
 .businfo .row .fno { font-family:var(--mono); font-weight:650; color:var(--ink); }
 .businfo .row .eta { margin-left:auto; font-weight:600; color:var(--accent); }
 .businfo .row .at { color:var(--ink-3); font-size:12px; font-family:var(--mono); }
+
+/* ── 移动端：侧栏收成抽屉（必须放最后，否则被上面的基础规则覆盖）──────── */
+@media (max-width:820px) {
+  .shell { grid-template-columns:1fr; }
+  .side {
+    position:fixed; top:0; bottom:0; left:0; z-index:20; height:100dvh;
+    width:min(84vw,320px); padding-top:env(safe-area-inset-top);
+    transform:translateX(-100%); transition:transform .2s ease; box-shadow:var(--shadow);
+  }
+  .side.open { transform:none; }
+  .scrim { display:block; position:fixed; inset:0; z-index:19; background:rgba(0,0,0,.5);
+    opacity:0; pointer-events:none; transition:opacity .2s ease; }
+  .scrim.on { opacity:1; pointer-events:auto; }
+  .iconbtn.menubtn { display:inline-flex; }
+  .top { padding:calc(10px + env(safe-area-inset-top)) 14px 10px; gap:10px; }
+  .body { padding:12px 12px calc(28px + env(safe-area-inset-bottom)); }
+  /* 手指比鼠标粗：触控目标放大 */
+  .rbus { height:22px; padding:0 7px; }
+  .lines li { padding:11px; }
+}
 </style>
 </head>
 <body>
@@ -149,9 +172,13 @@ body { background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans); -webk
     <div class="search"><input id="q" type="search" placeholder="搜索线路 / 起终点…" autocomplete="off"></div>
     <ul class="lines" id="lines"><li class="note">加载中…</li></ul>
   </aside>
+  <div class="scrim" id="scrim"></div>
 
   <main class="main">
     <header class="top">
+      <button class="iconbtn menubtn" id="btnMenu" type="button" aria-label="选择线路">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+      </button>
       <h1 id="title">选择线路</h1>
       <span class="meta" id="sub"></span>
       <div class="right">

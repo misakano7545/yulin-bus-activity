@@ -76,6 +76,23 @@ function stateOf(rt) {
   return ['idle', rt.desc || `状态 ${rt.state}`];
 }
 
+/* ── 移动端抽屉 ───────────────────────────────────────────────────── */
+// 桌面端 .menubtn/.scrim 都是 display:none，这里只管移动端的开合。
+let closeDrawer = () => {};
+
+function initDrawer() {
+  const side = document.querySelector('.side');
+  const scrim = $('#scrim');
+  const set = (open) => {
+    side.classList.toggle('open', open);
+    scrim.classList.toggle('on', open);
+  };
+  $('#btnMenu').addEventListener('click', () => set(!side.classList.contains('open')));
+  scrim.addEventListener('click', () => set(false));
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
+  closeDrawer = () => set(false);
+}
+
 /* ── 侧栏：按线路名合并方向（46 个方向 → 22 条）────────────────────── */
 // 「6路夜班」并入「6」—— 夜班是同一条线的夜间服务，站表是日班的子集
 const baseName = (n) => n.replace(/路?夜班$/, '');
@@ -297,6 +314,7 @@ async function refresh() {
 async function select(name) {
   current = name;
   sel = null;
+  closeDrawer();          // 移动端选完就收起抽屉
   const g = routes.find((r) => r.name === name);
   $('#title').textContent = name;
   $('#sub').textContent = g ? `${g.dirs[0].start} → ${g.dirs[0].end}` : '';
@@ -323,6 +341,7 @@ async function select(name) {
 
 async function boot() {
   initTheme();
+  initDrawer();
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
   try {
     routes = groupByName(await api('/lines'));
