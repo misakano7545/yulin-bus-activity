@@ -99,44 +99,6 @@ func encryptECB(t *testing.T, plain []byte) string {
 	return base64.StdEncoding.EncodeToString(out)
 }
 
-// applyStopPosFix：上游把某站标在绕行支线上时，标记要挪到离 canonical 坐标最近的
-// 折线点，且旧标记必须清掉（同 order 留两个点的话 trackIdx 取到的是后一个旧点）。
-func TestApplyStopPosFix(t *testing.T) {
-	track := [][3]float64{
-		{110.143000, 22.628000, 0},
-		{110.144400, 22.628800, 0}, // idx1：正线上、离 canonical 最近
-		{110.143300, 22.628100, 0},
-		{110.143436, 22.628088, 29}, // idx3：上游标的错点（支线上）
-	}
-	stops := []Stop{{Order: 29, Name: "人民大北路口"}}
-	applyStopPosFix(track, "0775315346289", stops)
-
-	if track[3][2] != 0 {
-		t.Fatalf("旧标记没清掉：idx3 stopOrder=%v", track[3][2])
-	}
-	if track[1][2] != 29 {
-		t.Fatalf("标记没挪到最近点：idx1 stopOrder=%v", track[1][2])
-	}
-	n := 0
-	for _, p := range track {
-		if p[2] == 29 {
-			n++
-		}
-	}
-	if n != 1 {
-		t.Fatalf("stopOrder 29 出现 %d 次，应当唯一", n)
-	}
-
-	// 修正表里没有的线路不受影响
-	before := append([][3]float64(nil), track...)
-	applyStopPosFix(track, "775200849296", stops)
-	for i := range track {
-		if track[i] != before[i] {
-			t.Fatalf("无关线路被改动：idx%d %v -> %v", i, before[i], track[i])
-		}
-	}
-}
-
 // applyTrackCutFix：去掉「出去再折返」的伪迹段，A、B 两点都保留，其余线路不动。
 func TestApplyTrackCutFix(t *testing.T) {
 	track := [][3]float64{

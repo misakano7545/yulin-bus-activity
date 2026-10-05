@@ -215,11 +215,26 @@ function renderLines(filter) {
 }
 
 /* ── 折线几何 ─────────────────────────────────────────────────────── */
-// 折线点 [lng, lat, stopOrder]，stopOrder>0 表示「这个点就是第 N 站」。
-// 末站没有标记（上游只在站与站之间打点），取折线终点兜底。
-function trackIdx(track) {
+// 站点在折线上的落点：以上游给的站坐标（stopPos）为准，snap 到折线上最近的顶点。
+// 不用折线的 stopOrder 标记 —— 实测那些标记会漂（1路最大 194m、6路夜班 129m），
+// 而站坐标本身就压在折线上（≤1m）。所以同一站名在不同线路/班次里能对上。
+// 没有 stopPos 时才退回标记点。
+function trackIdx(track, stopPos) {
   const m = new Map();
-  for (let i = 0; i < track.length; i++) if (track[i][2]) m.set(track[i][2], i);
+  for (const s of stopPos || []) {
+    const [lng, lat] = wgs2gcj(s.lng, s.lat);
+    const k = Math.cos((lat * Math.PI) / 180);
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < track.length; i++) {
+      const dx = (track[i][0] - lng) * k, dy = track[i][1] - lat;
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) m.set(s.order, best);
+  }
+  for (let i = 0; i < track.length; i++) {
+    if (track[i][2] && !m.has(track[i][2])) m.set(track[i][2], i);
+  }
   return m;
 }
 const stopIdx = (track, idx, order) => (idx.has(order) ? idx.get(order) : track.length - 1);
@@ -456,7 +471,7 @@ async function renderMap() {
     return;
   }
 
-  const idx = trackIdx(track);
+  const idx = trackIdx(track, it.rt.stopPos);
   const nightOn = !!(night && nowMin() >= night.from && nowMin() <= night.to);
   const buses = it.rt.buses || [];
   const byOrder = new Map();

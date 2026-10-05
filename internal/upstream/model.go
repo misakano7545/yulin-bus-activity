@@ -62,4 +62,14 @@ type Realtime struct {
 	State  int    `json:"state"` // 0 正常 / -1 等待发车 / -2 临时停运 / -3 末班已过
 	Desc   string `json:"desc"`
 	Buses  []Bus  `json:"buses"`
+	// StopPos 各站在上游自己那套 WGS 坐标里的位置。站点圆点与车辆插值都以它为准：
+	// 折线上的 stopOrder 标记点会漂（实测最大 194m），站坐标就压在折线上（≤1m）。
+	StopPos []StopPos `json:"stopPos"`
+}
+
+// StopPos 是站在上游 WGS 坐标里的位置。
+type StopPos struct {
+	Order int     `json:"order"`
+	Lng   float64 `json:"lng"`
+	Lat   float64 `json:"lat"`
 }
