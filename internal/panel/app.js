@@ -370,6 +370,7 @@ function setFocus(lineId) {
   if (isMobile()) hideCard();
   renderDirs();
   renderArr();
+  renderMeta();   // 首末班跟着方向走
   renderMap();
   renderCard();
 }
@@ -544,16 +545,20 @@ function renderArr() {
   }
 }
 
-// 本线信息：两个方向的首末班与票价。票价只有实时接口给（线路静态接口没有）。
+// 本线信息：跟着方向切换走 —— 只显示当前方向的首末班/票价/状态。
+// 票价只有实时接口给（线路静态接口没有）。
 function renderMeta() {
   const box = $('#meta');
   box.textContent = '';
   if (!detail.length) return;
-  for (const it of detail) {
-    box.append(el('div', 'k txt', `${it.dir.start} → ${it.dir.end}`));
-    box.append(el('div', 'v', `${it.dir.firstTime}–${it.dir.lastTime} · ${it.rt.price || '—'}`));
-  }
-  const [cls, txt] = stateOf((detail.find((x) => x.rt.state === 0) || detail[0]).rt);
+  const it = focusDir();
+  const [cls, txt] = stateOf(it.rt);
+  box.append(el('div', 'k txt', '方向'));
+  box.append(el('div', 'v txt', `${it.dir.start} → ${it.dir.end}`));
+  box.append(el('div', 'k txt', '首末班'));
+  box.append(el('div', 'v', `${it.dir.firstTime}–${it.dir.lastTime}`));
+  box.append(el('div', 'k txt', '票价'));
+  box.append(el('div', 'v', it.rt.price || '—'));
   box.append(el('div', 'k txt', '当前状态'));
   box.append(el('div', 'v txt ' + cls, txt));
 }
@@ -614,6 +619,7 @@ async function selectStop(it, s) {
   showCard();
   renderDirs();   // 方向变了，切换器的选中态与到站列表都要跟上
   renderArr();
+  renderMeta();
   renderMap();
   renderCard();
 
