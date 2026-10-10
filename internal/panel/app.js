@@ -24,6 +24,7 @@ let busSel = null;    // 选中的车辆 {lineId, fleetNo}
 let busListOpen = false;  // 车辆列表开着：卡片区显示车辆列表而不是站点卡
 let focusId = null;   // 手动切到的方向（lineId）；null = 第一个方向
 let shift = 'day';    // 'day' | 'alt'：日班/普通 vs 夜班/定制
+let shiftTouched = false;  // 用户手动切过变体 —— 之后日班收班也不自动切了
 let shifts = { day: [], alt: [] };
 let altSvc = null;    // 本线变体的服务：{label, stops:Set, from, to}；无变体则 null
 let timer = null;
@@ -310,7 +311,7 @@ function renderTags(it) {
       `${altOn ? g.alt.label : g.alt.base} ${spanOf(altOn ? g.alt.dirs : g.dirs, it.dir.end)}`);
     b.type = 'button';
     b.title = altOn ? `切成${g.alt.base}` : `切成${g.alt.label}`;
-    b.addEventListener('click', () => setShift(altOn ? 'day' : 'alt'));
+    b.addEventListener('click', () => { shiftTouched = true; setShift(altOn ? 'day' : 'alt'); });
     box.append(b);
   }
   const [cls, txt] = stateOf(it.rt);
@@ -594,8 +595,6 @@ async function refresh() {
     if (wanted !== current) return;   // 切线路时丢弃过期响应
     shifts = { day: got.slice(0, g.dirs.length), alt: got.slice(g.dirs.length) };
     if (!shifts[shift].length) shift = 'day';   // 这条线没有这个变体就回日班/普通
-    detail = shifts[shift];
-    stopCache.clear();                // 数据变了，到站缓存作废
 
     // 夜班站表直接从刚取到的夜班数据里来
     // 变体不服务的站：拿它自己的站表，按核心名跟日班站对 ——「金城商厦（市中医院）」要对上定制的「金城商厦」
@@ -605,6 +604,14 @@ async function refresh() {
       from: Math.min(...g.alt.dirs.map((d) => hm(d.firstTime))),
       to: Math.max(...g.alt.dirs.map((d) => hm(d.lastTime))),
     } : null;
+
+    // 日班这一向收班了 → 默认显示夜班/定制（那条还在跑或刚跑完）。用户手动切过就不插手。
+    // 判据用「当前看向」的首末班，不用整条线的并集：G02 两向末班差 70 分钟（19:50 / 18:40）
+    const dayIt = shifts.day.find((x) => x.dir.lineId === focusId) || shifts.day[0];
+    if (!shiftTouched && altSvc && dayIt && nowMin() > hm(dayIt.dir.lastTime)) setShift('alt');
+
+    detail = shifts[shift];
+    stopCache.clear();                // 数据变了，到站缓存作废
 
     $('#upd').className = 'upd';
     $('#upd').textContent = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · 车来了`;
@@ -629,6 +636,7 @@ async function select(name) {
   busListOpen = false;
   focusId = null;         // 换线路后回到第一个方向
   shift = 'day';          // 以及回到日班/普通（变体的站表与时段都由 refresh 重建）
+  shiftTouched = false;   // 换线路：自动切变体的判定重新开始
   detail = [];
   shifts = { day: [], alt: [] };
   stopCache.clear();
