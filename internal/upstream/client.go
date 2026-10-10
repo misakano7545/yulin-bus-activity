@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"net/url"
@@ -37,6 +38,9 @@ const (
 
 	ttlRealtime = 5 * time.Second
 	ttlStatic   = time.Hour
+	// ttlLineState 线路状态（停运与否）的刷新间隔。状态变得慢（停运一次好几天），
+	// 而刷新要 46 次加密调用，所以隔久一点；列表只用它标「停运」，点进线路页看的是实时真值。
+	ttlLineState = 5 * time.Minute
 
 	// 上游 bus.state：0 在途，1 已到站（对应 H5 的 BUS_STATE）
 	busStateArrived = 1
@@ -107,6 +111,72 @@ func (c *Client) get(ctx context.Context, handler string, p url.Values) (json.Ra
 		return nil, fmt.Errorf("业务失败 status=%s errmsg=%s", env.Jsonr.Status, env.Jsonr.Errmsg)
 	}
 	return env.Jsonr.Data, nil
+}
+
+// LineState 是一条线当前的运营状态（来自实时接口）。
+type LineState struct {
+	State int
+	Desc  string
+	Count int // 该方向当前在途车辆数
+}
+
+const cacheKeyLineStates = "lineStates"
+
+// StartLineStateLoop 后台定时刷新全部线路的运营状态（阻塞，用 go 调用）。
+// 上游只有实时接口带 state，而线路列表要一次知道全部 —— 46 次加密调用挂在 /lines
+// 请求里同步做会把首屏卡好几秒，所以这里后台刷、请求只读缓存。
+func (c *Client) StartLineStateLoop(ctx context.Context) {
+	for {
+		if lines, err := c.Lines(ctx); err != nil {
+			log.Printf("线路状态: 取线路目录失败 %v", err)
+		} else if n, err := c.refreshLineStates(ctx, lines); err != nil {
+			log.Printf("线路状态: 刷新失败 %v", err)
+		} else {
+			log.Printf("线路状态: 刷新 %d/%d 条", n, len(lines))
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(ttlLineState):
+		}
+	}
+}
+
+// refreshLineStates 并发拉一遍所有线路的状态，成功才写缓存（一条都没成就留旧的）。
+func (c *Client) refreshLineStates(ctx context.Context, lines []Line) (int, error) {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 6) // 并发 6：够快，也不至于把上游打死
+	m := make(map[string]LineState, len(lines))
+	for _, l := range lines {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			rt, err := c.Realtime(ctx, id, 0)
+			if err != nil {
+				return // 单条失败就当不知道，不猜状态
+			}
+			mu.Lock()
+			m[id] = LineState{State: rt.State, Desc: rt.Desc, Count: len(rt.Buses)}
+			mu.Unlock()
+		}(l.LineID)
+	}
+	wg.Wait()
+	if len(m) == 0 {
+		return 0, fmt.Errorf("全部线路都取失败")
+	}
+	c.cache.put(cacheKeyLineStates, m, ttlLineState)
+	return len(m), nil
+}
+
+// LineStates 返回缓存里的线路状态表；还没刷到就返回 nil（调用方当「不知道」）。
+func (c *Client) LineStates() map[string]LineState {
+	if v, ok := c.cache.get(cacheKeyLineStates); ok {
+		return v.(map[string]LineState)
+	}
+	return nil
 }
 
 // Lines 返回全部线路（每条线两个方向各一条记录）。
@@ -308,7 +378,7 @@ func (c *Client) Realtime(ctx context.Context, lineID string, targetOrder int) (
 		bus := Bus{
 			FleetNo: no, RawID: b.Licence, LineID: lineID, Confidence: "high",
 			Lat: b.Lat, Lng: b.Lng, Order: b.Order, Target: up.Target, UpdatedAt: now,
-			Pos: pos,
+			Pos: pos, State: b.State, Speed: b.Speed,
 		}
 		if !confident {
 			bus.Confidence = "low"

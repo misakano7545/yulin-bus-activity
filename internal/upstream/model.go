@@ -10,6 +10,14 @@ type Line struct {
 	End       string `json:"end"`
 	FirstTime string `json:"firstTime"`
 	LastTime  string `json:"lastTime"`
+	// State/Desc 来自实时接口：cityLineList 里没有运营状态，只有实时接口知道
+	// （13 这种把「临时停运」写进了名字，先进制造城专线连名字都没带）。
+	// 由后台定时刷进缓存、/lines 贴上来。没刷到的保持 0，前端只认 -2。
+	State int    `json:"state"`
+	Desc  string `json:"desc"`
+	// Count 该方向当前在途车辆数，同样来自实时接口；首页把两个方向（含变体）相加。
+	// 最多旧 ttlLineState（5 分钟）——点进线路页看的是实时值。
+	Count int `json:"count"`
 }
 
 // Stop 是线路上的一个站。
@@ -48,6 +56,11 @@ type Bus struct {
 	Target     int     `json:"targetOrder"` // 目标站序
 	ETA        int     `json:"eta"`         // 到目标站秒数
 	ArriveAt   string  `json:"arriveAt"`    // 到目标站时刻 HH:MM
+	// State 是上游的 BUS_STATE：0 在途，1 已到站。它是「车停没停在站上」的权威，
+	// 不用 pos 反推 —— 停站的车投影到 0.95 也是常事，那会让车标短一截。
+	State int `json:"state"`
+	// Speed 上游原值（km/h），跟随页显示用。站停/无信号时为 0。
+	Speed float64 `json:"speed"`
 	// Pos 是车在「order-1 站 → order 站」这一段上的位置比例：1=在 order 站圆点上，
 	// 0=在上一站圆点上。上游 order 给的是「正在接近的站」，车实际在两站之间；
 	// 用它把图标画在两点中间而不是钉在圆点上。取不到坐标时恒为 1。
