@@ -94,6 +94,15 @@ const VARIANTS = [{ re: /路?(夜班|定制)$/, label: '夜班', base: '日班' 
 // 广西先进制造城（玉林）公交快速专线 的括号是名字本身。
 const LINE_TAG = /[（(](临时停运|临时绕行|暂停运营)[）)]$/;
 
+// 上游没有「站点只在某时段启用」这个字段，只能人工标注（站点名全局唯一才敢只按名匹配，
+// 玉林市第三人民医院（玉林市第十中学）只出现在 9 路两端，是首末站）。
+const STOP_NOTES = { '玉林市第三人民医院（玉林市第十中学）': '仅学生上学、放学时段启用' };
+
+// 条件启用站落在首末站上时，「首末站」显示真正的一天终点：9 路的第十中学那站只在学生
+// 上下学停，其余班次到它前一站「火车站」为止。只改显示 —— 比对方向/找同名站仍用原名。
+const TERMINUS_ALIAS = { '玉林市第三人民医院（玉林市第十中学）': '火车站' };
+const endName = (s) => TERMINUS_ALIAS[s] || s;
+
 function groupByName(ls) {
   const m = new Map();
   for (const l of ls) {
@@ -135,7 +144,8 @@ function renderLines(filter) {
     !f || r.name.toLowerCase().includes(f) ||
     (r.alt && (r.alt.label.includes(f) ||           // 搜「夜班」能找到
                r.alt.dirs.some((d) => d.name.includes(f)))) ||   // 搜「定制」也能（名称按上游原文）
-    r.dirs.some((d) => d.start.toLowerCase().includes(f) || d.end.toLowerCase().includes(f)));
+    r.dirs.some((d) => endName(d.start).toLowerCase().includes(f) ||
+                       endName(d.end).toLowerCase().includes(f)));
   // 收藏的排前面（sort 稳定，组内保持上游顺序）
   hit.sort((a, b) => (favs.has(b.name) ? 1 : 0) - (favs.has(a.name) ? 1 : 0));
 
@@ -148,7 +158,7 @@ function renderLines(filter) {
     const tag = lineTag(r);
     if (tag) li.classList.add('off');
     li.append(el('span', 'badge', r.name));
-    li.append(el('span', 'to', `${r.dirs[0].start} → ${r.dirs[0].end}`));
+    li.append(el('span', 'to', `${endName(r.dirs[0].start)} → ${endName(r.dirs[0].end)}`));
     if (tag) li.append(el('span', 'tag', tag));
     // 两个方向的车辆数合计（含夜班/定制变体）
     const n = [...r.dirs, ...(r.alt ? r.alt.dirs : [])].reduce((s, d) => s + (d.count || 0), 0);
@@ -264,8 +274,8 @@ function spanOf(ls, end) {
 
 function renderHead(it) {
   $('#dTitle').textContent = titleOf(current);
-  $('#dFrom').textContent = it.dir.start;
-  $('#dTo').textContent = it.dir.end;
+  $('#dFrom').textContent = endName(it.dir.start);
+  $('#dTo').textContent = endName(it.dir.end);
 }
 
 // 标签行：首末班 / 票价 / 总站数 / 变体切换 / 运营状态。
@@ -329,6 +339,7 @@ function renderStation() {
   const s = it.stops.find((x) => x.order === sel.order);
   if (!s) return;
   box.append(el('div', 'sn', s.name));
+  if (STOP_NOTES[s.name]) box.append(el('div', 'sub note', STOP_NOTES[s.name]));
 
   const up = upcoming(it, s);
   const hint = el('div', 'hint');
@@ -455,11 +466,12 @@ function renderRail() {
   let selCell = null;
   for (const s of it.stops) {
     const skip = altOn && !altSvc.stops.has(s.name);
+    const note = STOP_NOTES[s.name];
     const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
-    const cell = el('div', 'stn' + (skip ? ' skip' : '') + (on ? ' on' : ''));
+    const cell = el('div', 'stn' + (skip ? ' skip' : '') + (note ? ' cond' : '') + (on ? ' on' : ''));
     // 站点就是站点：方块里不放公交车图标，车才用那个图标（走向条上的色块、车辆列表）
     cell.append(el('i', 'bx'), el('span', 'nm', s.name));
-    cell.title = skip ? `${s.name}（${altSvc.label}不停）` : s.name;
+    cell.title = skip ? `${s.name}（${altSvc.label}不停）` : (note ? `${s.name}（${note}）` : s.name);
     // 同站两辆车会叠在一起（没做纵向分道）—— 实际很少见，先不管
     for (const b of (byOrder.get(s.order) || [])) {
       const chip = el('span', 'bus' + (busSel && busSel.fleetNo === b.fleetNo ? ' on' : ''));

@@ -207,6 +207,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .scard .hint.mute{color:var(--md-sys-color-on-surface-variant);font-size:14px;line-height:20px}
 .scard .sub{margin-top:8px;font:400 12px/16px var(--sans);letter-spacing:.4px;
   color:var(--md-sys-color-on-surface-variant)}
+/* 条件启用站的说明（跟站名贴在一起，在提示语上面） */
+.scard .sub.note{color:var(--md-sys-color-tertiary);font-weight:500;letter-spacing:.2px}
 
 /* 车辆跟踪：点走向条上的车进这里，替掉站点卡 */
 .scard.follow{text-align:left}
@@ -278,6 +280,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .stn.on .nm{color:var(--md-sys-color-primary);font-weight:700}
 .stn.skip .bx{background:var(--md-sys-color-surface-variant)}
 .stn.skip .nm{color:var(--md-sys-color-error)}
+/* 条件启用站（只在上学、放学时段停）：实心块改成空心环 —— 26px 下跟实心块一眼分得清 */
+.stn.cond .bx{background:var(--md-sys-color-surface);box-shadow:inset 0 0 0 3px var(--md-sys-color-primary)}
 /* 车辆：段内插值。--p 是站间比例（1 = 正在接近的那站），left 按格宽折成像素。
    z-index:2 —— 站块是 1，车永远压在站块之上；车是挂在自己那一格里的，
    横向左/右溢出相邻格时仍然盖住它们的站块。
