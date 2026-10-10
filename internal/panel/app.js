@@ -72,6 +72,14 @@ const mins = (sec) => (sec > 0 ? (sec <= 60 ? '即将到站' : `约 ${Math.round
 // 排序键：没有 ETA（已过站 / 上游没给预测）的车排最后
 const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
 
+// 站名的「核心名」：去掉括号注。上游同一处站台会存两条记录，站名一个带注一个不带、id 也不同
+// ——「金城商厦」440-47 与「金城商厦（市中医院）」440-75 就是同一个站台，所以按核心名判同站。
+// 不按坐标：同一 id 在不同方向上的坐标能差 50m 以上（玉林师院东校区两个方向差 200m），
+// 距离法的阈值卡在「同站抖动」和「邻站间距」之间，两边会撞上。
+// ponytail: 只按核心名判。全市 14 组核心名相同的对里有几组确实是不同站台（汽车总站 3 个），
+// 但只有 6 路夜班、G02 定制这两条线用到这个判定，实测两组结果都跟站表条数差对得上，先走最简规则
+const coreName = (n) => n.replace(/[（(][^）)]*[）)]/g, '').trim();
+
 // 运营状态：上游 state 0 正常 / -1 等待发车 / -2 临时停运 / -3 末班已过
 function stateOf(rt) {
   if (!rt) return ['idle', '—'];
@@ -245,8 +253,7 @@ function oppositeStop(it, s) {
   if (!rev || !s) return null;
   let t = rev.stops.find((x) => x.name === s.name);
   if (!t) {
-    const core = (n) => n.replace(/[（(][^）)]*[）)]/g, '').trim();
-    const cand = rev.stops.filter((x) => core(x.name) === core(s.name));
+    const cand = rev.stops.filter((x) => coreName(x.name) === coreName(s.name));
     if (cand.length === 1) t = cand[0];
   }
   // ponytail: 同方向重复出现同名站（环线）时取第一个，玉林没有这种线
@@ -475,7 +482,7 @@ function renderRail() {
 
   let selCell = null;
   for (const s of it.stops) {
-    const skip = altOn && !altSvc.stops.has(s.name);
+    const skip = altOn && !altSvc.stops.has(coreName(s.name));
     const note = STOP_NOTES[s.name];
     const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
     const cell = el('div', 'stn' + (skip ? ' skip' : '') + (note ? ' cond' : '') + (on ? ' on' : ''));
@@ -591,10 +598,10 @@ async function refresh() {
     stopCache.clear();                // 数据变了，到站缓存作废
 
     // 夜班站表直接从刚取到的夜班数据里来
-    // 变体的服务时段与站表：标签行和走向条的「某站不停」标记都要用
+    // 变体不服务的站：拿它自己的站表，按核心名跟日班站对 ——「金城商厦（市中医院）」要对上定制的「金城商厦」
     altSvc = g.alt && g.alt.dirs.length ? {
       label: g.alt.label,
-      stops: new Set(shifts.alt.flatMap((it) => it.stops.map((s) => s.name))),
+      stops: new Set(shifts.alt.flatMap((it) => it.stops.map((s) => coreName(s.name)))),
       from: Math.min(...g.alt.dirs.map((d) => hm(d.firstTime))),
       to: Math.max(...g.alt.dirs.map((d) => hm(d.lastTime))),
     } : null;
