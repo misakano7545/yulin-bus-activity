@@ -15,7 +15,6 @@
 const $ = (s) => document.querySelector(s);
 const REFRESH_MS = 10000;
 const SVGNS = 'http://www.w3.org/2000/svg';
-const BUS_D = 'M2 2h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm0 1v5h12V3H2zm1 7.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm10 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z';
 
 let routes = [];      // 按线路名合并后的 21 条：{name, dirs:[Line,…], alt, tag}
 let current = null;   // 当前线路名；null = 停在列表页
@@ -43,17 +42,17 @@ function svgEl(tag, attrs) {
   for (const k in attrs) n.setAttribute(k, attrs[k]);
   return n;
 }
-// 单 path 图标：描边还是填充由 index.html 里各自容器的 CSS 决定
+// 单 path 图标：描边还是填充由 index.html 里各自容器的 CSS 决定。
+// viewBox 用 24 格 —— 这里所有 path 都是 Google Material 的 24 格路径，
+// 写 16 会把超出的部分裁掉（返回箭头 y 到 20，下半截是断的）。
 const icon = (d) => {
-  const s = svgEl('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true' });
+  const s = svgEl('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' });
   s.append(svgEl('path', { d }));
   return s;
 };
-function busIcon() {
-  const s = svgEl('svg', { viewBox: '0 0 16 16' });
-  s.append(svgEl('path', { d: BUS_D }));
-  return s;
-}
+// Material Symbols directions_bus（24 格，官方路径）
+const BUS_D = 'M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5s1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z';
+const busIcon = () => icon(BUS_D);
 
 async function api(path) {
   const r = await fetch(path);
