@@ -122,6 +122,16 @@ function groupByName(ls) {
 const favKey = 'bus.fav';
 let favs = new Set(JSON.parse(localStorage.getItem(favKey) || '[]'));
 
+// 列表排序用。数字名（1、605）按数值，其余（G01、动车专线（22路）…）排在其后且保持上游顺序。
+const numName = (n) => (/^\d+$/.test(n) ? +n : null);
+function cmpLine(a, b) {
+  const fav = favs.has(a.name) ? 0 : 1, fav2 = favs.has(b.name) ? 0 : 1;
+  if (fav !== fav2) return fav - fav2;
+  const na = numName(a.name), nb = numName(b.name);
+  if (na === null || nb === null) return na === nb ? 0 : (na === null ? 1 : -1);
+  return na - nb;
+}
+
 // 列表上的异常标记。名字里带（临时停运）的用名字里的词；名字没带的（上游把运营状态
 // 藏在实时接口里 —— 先进制造城专线就是这样，13 那种至少写进了名字）就看后台刷出来的
 // 状态：整条线（含变体）都报 -2 才算，且只在该线路本该在跑的时段里标 —— 收班之后
@@ -146,8 +156,9 @@ function renderLines(filter) {
                r.alt.dirs.some((d) => d.name.includes(f)))) ||   // 搜「定制」也能（名称按上游原文）
     r.dirs.some((d) => endName(d.start).toLowerCase().includes(f) ||
                        endName(d.end).toLowerCase().includes(f)));
-  // 收藏的排前面（sort 稳定，组内保持上游顺序）
-  hit.sort((a, b) => (favs.has(b.name) ? 1 : 0) - (favs.has(a.name) ? 1 : 0));
+  // 排序：收藏在前；数字线路按数值 —— 上游按字符串排，读出来是 1、11、13、2。
+  // 数字线路整体排在非数字（G01、动车专线…）之前，非数字之间保持上游顺序。
+  hit.sort(cmpLine);
 
   if (!hit.length) {
     ul.append(el('li', 'note', routes.length ? '没有匹配的线路' : '没有取到线路'));
