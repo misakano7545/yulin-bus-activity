@@ -1,38 +1,59 @@
-// app.js 面板前端逻辑。
+// app.js 面板前端逻辑（照「车来了」线路页的单列格式重做）。
 //
 // 只打本服务已有的三个接口，不新增后端：
 //   GET /lines                      线路目录（46 条 = 23 条线 × 2 方向）
-//   GET /lines/{id}                 站点序列 + 走向折线
-//   GET /lines/{id}/realtime        实时车辆
+//   GET /lines/{id}                 站点序列
+//   GET /lines/{id}/realtime        实时车辆（?targetOrder=N 时 ETA 算到该站）
 //
-// CSP 是 script-src 'self'（外加 webapi.amap.com）且无 unsafe-inline，所以：
-// 不写内联事件、不用 eval。站点/线路名一律经 textContent 落 DOM
-//（上游数据也是外部输入）；地图覆盖物的 content 是自造 HTML，只用固定模板。
+// CSP 是 script-src 'self' 且无 unsafe-inline，所以不写内联事件、不用 eval；
+// 站点/线路名一律经 textContent 落 DOM（上游数据也是外部输入）。
 //
-// 底图是高德 JS API（真实瓦片、可缩放），key 由 /amap.js 下发（见 panel.go）。
-// 折线与车辆仍然用「沿折线按 (order, pos) 插值」定位 —— 车标永远压在道路上，
-// 不需要车自身的经纬度，也就绕开了车辆坐标与折线基准是否一致的疑问（实测同基准）。
-// 折线本身是 WGS-84，而高德底图是 GCJ-02，所以取到折线后统一转一次，下游全程 GCJ。
+// 没有地图：车辆位置由上游的 (order, pos) 插到走向条上，不需要经纬度，也就不需要
+// 折线、坐标基准换算和高德 key —— 原来那套整段删了。
 'use strict';
 
 const $ = (s) => document.querySelector(s);
 const REFRESH_MS = 10000;
 const SVGNS = 'http://www.w3.org/2000/svg';
+const BUS_D = 'M2 2h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm0 1v5h12V3H2zm1 7.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm10 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z';
 
-let routes = [];      // 按线路名合并后的 22 条：{name, dirs:[Line,…], night:[Line,…]}
-let current = null;   // 当前线路名
-let detail = [];      // 当前线路各方向的 {dir, stops, track, rt}
-let sel = null;       // 选中的站点 {lineId, order}；刷新后要恢复高亮
-let focusId = null;   // 手动切到的方向（lineId）；null = 用第一个方向
-let shift = 'day';    // 'day' | 'night'：本线的班次（只有 6 路有夜班）
-let shifts = { day: [], night: [] };   // 两个班次各自的方向；detail 指当前那个
-let night = null;     // 本线夜班服务：{stops:Set, from, to}；无夜班则 null
+let routes = [];      // 按线路名合并后的 21 条：{name, dirs:[Line,…], alt, tag}
+let current = null;   // 当前线路名；null = 停在列表页
+let detail = [];      // 当前线路各方向的 {dir, stops, rt}
+let sel = null;       // 选中的站点 {lineId, order}
+let busSel = null;    // 选中的车辆 {lineId, fleetNo}
+let busListOpen = false;  // 车辆列表开着：卡片区显示车辆列表而不是站点卡
+let focusId = null;   // 手动切到的方向（lineId）；null = 第一个方向
+let shift = 'day';    // 'day' | 'alt'：日班/普通 vs 夜班/定制
+let shifts = { day: [], alt: [] };
+let altSvc = null;    // 本线变体的服务：{label, stops:Set, from, to}；无变体则 null
 let timer = null;
+let stopCache = new Map();       // `${lineId}:${order}` → 该站的到站快照
+let railScrollPending = false;   // 换线路/换变体/换方向时把选中站滚进视野；10 秒刷新不滚
 
-// "17:47" → 1067（当日分钟数）
-const hm = (s) => { const [h, m] = s.split(':'); return +h * 60 + +m; };
-const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
-const isMobile = () => matchMedia('(max-width:820px)').matches;
+/* ── 小工具 ───────────────────────────────────────────────────────── */
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+function svgEl(tag, attrs) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+// 单 path 图标：描边还是填充由 index.html 里各自容器的 CSS 决定
+const icon = (d) => {
+  const s = svgEl('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true' });
+  s.append(svgEl('path', { d }));
+  return s;
+};
+function busIcon() {
+  const s = svgEl('svg', { viewBox: '0 0 16 16' });
+  s.append(svgEl('path', { d: BUS_D }));
+  return s;
+}
 
 async function api(path) {
   const r = await fetch(path);
@@ -43,43 +64,10 @@ async function api(path) {
   return r.json();
 }
 
-const el = (tag, cls, text) => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text != null) n.textContent = text;
-  return n;
-};
-const svgEl = (tag, attrs) => {
-  const n = document.createElementNS(SVGNS, tag);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
-  return n;
-};
-
-/* ── 主题 ─────────────────────────────────────────────────────────── */
-// 三态：auto（默认，跟随系统）→ 手动点过之后记 light/dark。
-// 图标不在这里换，靠 [data-theme] 的 CSS 显隐，少一段拼 innerHTML。
-const LS_THEME = 'bus.theme';
-const mqLight = matchMedia('(prefers-color-scheme: light)');
-let theme = localStorage.getItem(LS_THEME) || 'auto';
-
-function applyTheme() {
-  const eff = theme === 'auto' ? (mqLight.matches ? 'light' : 'dark') : theme;
-  document.documentElement.dataset.theme = eff;
-  $('#btnTheme').title = eff === 'light' ? '切换到深色' : '切换到浅色';
-  // 覆盖物的颜色走 CSS 变量，跟着主题自动变；只有底图要显式切一套样式
-  if (amap) amap.setMapStyle(mapStyle());
-}
-
-function initTheme() {
-  applyTheme();
-  mqLight.addEventListener('change', () => { if (theme === 'auto') applyTheme(); });
-  $('#btnTheme').addEventListener('click', () => {
-    theme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-    localStorage.setItem(LS_THEME, theme);
-    applyTheme();
-  });
-}
-
+// "17:47" → 1067（当日分钟数）
+const hm = (s) => { const [h, m] = s.split(':'); return +h * 60 + +m; };
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 // 到站倒计时：按分钟说，一分钟内说「即将到站」，已过站直说
 const mins = (sec) => (sec > 0 ? (sec <= 60 ? '即将到站' : `约 ${Math.round(sec / 60)} 分钟`) : '已过站');
 // 排序键：没有 ETA（已过站 / 上游没给预测）的车排最后
@@ -95,73 +83,11 @@ function stateOf(rt) {
   return ['idle', rt.desc || `状态 ${rt.state}`];
 }
 
-/* ── 线路配色 ─────────────────────────────────────────────────────── */
-// 设计稿按线路给色徽章。颜色必须稳定（刷新不能跳），所以按线路名取哈希下标，
-// 不按出现顺序分配。
-const PALETTE = ['#5b4fd8', '#0f9d63', '#e07b39', '#2f7fd8', '#b03a5b', '#8e44ad', '#0f8b8d', '#a9761a'];
-function lineColor(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return PALETTE[h % PALETTE.length];
-}
-
-/* ── 移动端抽屉 ───────────────────────────────────────────────────── */
-// 桌面端 .menubtn/.scrim 都是 display:none，这里只管移动端的开合。
-let closeDrawer = () => {};
-
-function initDrawer() {
-  const side = $('#side'), scrim = $('#scrim');
-  const set = (open) => { side.classList.toggle('open', open); scrim.classList.toggle('on', open); };
-  $('#btnMenu').addEventListener('click', () => set(!side.classList.contains('open')));
-  scrim.addEventListener('click', () => set(false));
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') { set(false); deselect(); } });
-  closeDrawer = () => set(false);
-}
-
-/* ── 到站卡（桌面浮层 / 移动端底部抽屉）────────────────────────────── */
-let stopCache = new Map();   // `${lineId}:${order}` → 到站数据；每次刷新作废
-
-function showCard() { $('#infosect').classList.add('on'); }
-function hideCard() { $('#infosect').classList.remove('on'); }
-function deselect() {
-  sel = null;
-  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
-  renderMap();     // 地图上的选中态也是 renderMap 画的，不重绘的话站还亮着
-  if (isMobile()) hideCard(); else renderCard();
-}
-
-// 移动端抽屉的拖拽手柄。桌面端 .grab 是 display:none，收不到指针事件。
-function initSheet() {
-  const sheet = $('#infosect'), grab = $('#grab');
-  let y0 = 0, dy = 0, dragging = false;
-
-  grab.addEventListener('pointerdown', (e) => {
-    dragging = true; y0 = e.clientY; dy = 0;
-    grab.setPointerCapture(e.pointerId);
-    sheet.style.transition = 'none';        // 拖动期间跟手，不要缓动
-  });
-  grab.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    dy = Math.max(0, e.clientY - y0);
-    sheet.style.transform = `translateY(${dy}px)`;
-  });
-  const end = () => {
-    if (!dragging) return;
-    dragging = false;
-    sheet.style.transition = '';
-    sheet.style.transform = '';
-    if (dy > sheet.getBoundingClientRect().height * 0.3) hideCard();
-  };
-  grab.addEventListener('pointerup', end);
-  grab.addEventListener('pointercancel', end);
-  grab.addEventListener('keydown', (e) => {  // 键盘可达
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hideCard(); }
-  });
-}
-
-/* ── 侧栏：按线路名合并方向（46 个方向 → 22 条）────────────────────── */
-// 「6路夜班」并入「6」—— 夜班是同一条线的夜间服务，站表是日班的子集
-const baseName = (n) => n.replace(/路?夜班$/, '');
+/* ── 线路列表 ─────────────────────────────────────────────────────── */
+// 线路名后缀里的「服务变体」：夜班、定制。都是同一条线的另一套服务 —— 站表、首末班、
+// lineId 都不一样，列表里合并成一条，靠标签行那颗芯片切换（6 路夜班就是这么处理的）。
+// 夜班、定制都是同一条线在另一时段的服务，界面上统一按「日班/夜班」显示
+const VARIANTS = [{ re: /路?(夜班|定制)$/, label: '夜班', base: '日班' }];
 
 // 上游把营运状态塞进了线路名后缀（13（临时停运）、动车专线（22路）（临时停运））。
 // 只认这几个已知状态词，不做通用「去掉尾部括号」—— 大容山专线（28路）、
@@ -173,13 +99,32 @@ function groupByName(ls) {
   for (const l of ls) {
     const t = LINE_TAG.exec(l.name);
     const bare = t ? l.name.slice(0, t.index) : l.name;
-    const base = baseName(bare);
-    if (!m.has(base)) m.set(base, { name: base, dirs: [], night: [], tag: null });
+    const v = VARIANTS.find((x) => x.re.test(bare));
+    const base = v ? bare.replace(v.re, '') : bare;
+    if (!m.has(base)) m.set(base, { name: base, dirs: [], alt: null, tag: null });
     const g = m.get(base);
     if (t) g.tag = t[1];
-    (bare === base ? g.dirs : g.night).push(l);
+    if (v) (g.alt = g.alt || { label: v.label, base: v.base, dirs: [] }).dirs.push(l);
+    else g.dirs.push(l);
   }
   return [...m.values()];
+}
+
+const favKey = 'bus.fav';
+let favs = new Set(JSON.parse(localStorage.getItem(favKey) || '[]'));
+
+// 列表上的异常标记。名字里带（临时停运）的用名字里的词；名字没带的（上游把运营状态
+// 藏在实时接口里 —— 先进制造城专线就是这样，13 那种至少写进了名字）就看后台刷出来的
+// 状态：整条线（含变体）都报 -2 才算，且只在该线路本该在跑的时段里标 —— 收班之后
+// 上游也可能报 -2，那不是异常。末班已过(-3)不标：每天都会到。
+function lineTag(r) {
+  if (r.tag) return r.tag;
+  const all = [...r.dirs, ...(r.alt ? r.alt.dirs : [])];
+  if (!all.length || !all.every((d) => d.state === -2)) return null;
+  const from = Math.min(...all.map((d) => hm(d.firstTime)));
+  const to = Math.max(...all.map((d) => hm(d.lastTime)));
+  if (!(from <= nowMin() && nowMin() <= to)) return null;   // 时段缺失/已收班 → 不标
+  return (all.find((d) => d.desc) || {}).desc || '临时停运';
 }
 
 function renderLines(filter) {
@@ -188,168 +133,60 @@ function renderLines(filter) {
   ul.textContent = '';
   const hit = routes.filter((r) =>
     !f || r.name.toLowerCase().includes(f) ||
+    (r.alt && (r.alt.label.includes(f) ||           // 搜「夜班」能找到
+               r.alt.dirs.some((d) => d.name.includes(f)))) ||   // 搜「定制」也能（名称按上游原文）
     r.dirs.some((d) => d.start.toLowerCase().includes(f) || d.end.toLowerCase().includes(f)));
-
-  $('#linecnt').textContent = f ? `${hit.length}/${routes.length} 条` : `${routes.length} 条`;
+  // 收藏的排前面（sort 稳定，组内保持上游顺序）
+  hit.sort((a, b) => (favs.has(b.name) ? 1 : 0) - (favs.has(a.name) ? 1 : 0));
 
   if (!hit.length) {
-    ul.append(el('li', 'note', '没有匹配的线路'));
+    ul.append(el('li', 'note', routes.length ? '没有匹配的线路' : '没有取到线路'));
     return;
   }
   for (const r of hit) {
     const li = el('li', r.name === current ? 'on' : null);
-    if (r.tag) li.classList.add('off');
-    const b = el('span', 'badge', r.name);
-    b.style.background = lineColor(r.name);
-    li.append(b);
+    const tag = lineTag(r);
+    if (tag) li.classList.add('off');
+    li.append(el('span', 'badge', r.name));
     li.append(el('span', 'to', `${r.dirs[0].start} → ${r.dirs[0].end}`));
-    if (r.tag) li.append(el('span', 'tag', r.tag));
-    if (r.online) li.append(el('span', 'n', String(r.online)));
+    if (tag) li.append(el('span', 'tag', tag));
+    // 两个方向的车辆数合计（含夜班/定制变体）
+    const n = [...r.dirs, ...(r.alt ? r.alt.dirs : [])].reduce((s, d) => s + (d.count || 0), 0);
+    li.append(el('span', 'n' + (n ? '' : ' zero'), String(n)));
+    if (favs.has(r.name)) li.append(el('span', 'star', '★'));
     li.tabIndex = 0;
-    li.addEventListener('click', () => select(r.name));
+    li.addEventListener('click', () => openLine(r.name));
     li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(r.name); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLine(r.name); }
     });
     ul.append(li);
   }
 }
 
-/* ── 折线几何 ─────────────────────────────────────────────────────── */
-// 站点在折线上的落点：以上游给的站坐标（stopPos）为准，snap 到折线上最近的顶点。
-// 不用折线的 stopOrder 标记 —— 实测那些标记会漂（1路最大 194m、6路夜班 129m），
-// 而站坐标本身就压在折线上（≤1m）。所以同一站名在不同线路/班次里能对上。
-// 没有 stopPos 时才退回标记点。
-function trackIdx(track, stopPos) {
-  const m = new Map();
-  for (const s of stopPos || []) {
-    const [lng, lat] = wgs2gcj(s.lng, s.lat);
-    const k = Math.cos((lat * Math.PI) / 180);
-    let best = -1, bd = Infinity;
-    for (let i = 0; i < track.length; i++) {
-      const dx = (track[i][0] - lng) * k, dy = track[i][1] - lat;
-      const d = dx * dx + dy * dy;
-      if (d < bd) { bd = d; best = i; }
-    }
-    if (best >= 0) m.set(s.order, best);
+/* ── 视图切换（列表 ↔ 线路页）────────────────────────────────────────
+   走 hash 而不是一个 hidden 变量：手机的系统返回键就能退回列表。 */
+function onHash() {
+  const n = decodeURIComponent(location.hash.replace(/^#/, ''));
+  if (n && routes.some((r) => r.name === n)) {
+    $('#vList').hidden = true;
+    $('#vDetail').hidden = false;
+    select(n);
+  } else {
+    current = null;
+    $('#vList').hidden = false;
+    $('#vDetail').hidden = true;
   }
-  for (let i = 0; i < track.length; i++) {
-    if (track[i][2] && !m.has(track[i][2])) m.set(track[i][2], i);
-  }
-  return m;
 }
-const stopIdx = (track, idx, order) => (idx.has(order) ? idx.get(order) : track.length - 1);
+const openLine = (name) => {
+  if (decodeURIComponent(location.hash.replace(/^#/, '')) === name) onHash();
+  else location.hash = encodeURIComponent(name);   // 交给 hashchange
+};
 
-// 车在「order-1 站 → order 站」这一段上，pos 是段内比例（1=已到本站）。
-// 沿折线按累积长度取点，所以车永远落在道路上，而不是两点直线连线上。
-function busPoint(track, idx, order, pos) {
-  const a = stopIdx(track, idx, Math.max(1, order - 1));
-  const b = stopIdx(track, idx, Math.max(1, order));
-  if (b <= a) return track[a] || track[0];
-  let total = 0;
-  const seg = [];
-  for (let i = a; i < b; i++) {
-    const dx = track[i + 1][0] - track[i][0], dy = track[i + 1][1] - track[i][1];
-    const d = Math.hypot(dx, dy);
-    seg.push(d); total += d;
-  }
-  if (total === 0) return track[a];
-  let want = Math.min(Math.max(pos, 0), 1) * total;
-  for (let i = 0; i < seg.length; i++) {
-    if (want <= seg[i]) {
-      const t = seg[i] === 0 ? 0 : want / seg[i];
-      return [track[a + i][0] + (track[a + i + 1][0] - track[a + i][0]) * t,
-              track[a + i][1] + (track[a + i + 1][1] - track[a + i][1]) * t];
-    }
-    want -= seg[i];
-  }
-  return track[b];
-}
+/* ── 线路页 ───────────────────────────────────────────────────────── */
+const titleOf = (n) => (/路/.test(n) ? `${n}公交车` : `${n}路公交车`);
 
-/* ── 坐标基准 ─────────────────────────────────────────────────────── */
-// 上游折线是 WGS-84。实测依据：直接铺在高德瓦片上，整条线偏到街区里；按下面
-// 转换后才压着道路，且用维基百科上「玉林站」的 WGS-84 坐标反查，转换后才落在
-// 高德瓦片画的玉林站里。高德底图是 GCJ-02，所以进地图前统一转一次。
-const GCJ_A = 6378245.0, GCJ_EE = 0.00669342162296594323;
-const outOfChina = (lng, lat) =>
-  !(lng > 72.004 && lng < 137.8347 && lat > 0.8293 && lat < 55.8271);
-
-function wgs2gcj(lng, lat) {
-  if (outOfChina(lng, lat)) return [lng, lat];
-  const x = lng - 105, y = lat - 35, S = Math.sin;
-  let dLat = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
-  dLat += (20 * S(6 * x * Math.PI) + 20 * S(2 * x * Math.PI)) * 2 / 3;
-  dLat += (20 * S(y * Math.PI) + 40 * S(y / 3 * Math.PI)) * 2 / 3;
-  dLat += (160 * S(y / 12 * Math.PI) + 320 * S(y * Math.PI / 30)) * 2 / 3;
-  let dLng = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
-  dLng += (20 * S(6 * x * Math.PI) + 20 * S(2 * x * Math.PI)) * 2 / 3;
-  dLng += (20 * S(x * Math.PI) + 40 * S(x / 3 * Math.PI)) * 2 / 3;
-  dLng += (150 * S(x / 12 * Math.PI) + 300 * S(x / 30 * Math.PI)) * 2 / 3;
-  const rad = lat * Math.PI / 180, magic = 1 - GCJ_EE * S(rad) * S(rad), sq = Math.sqrt(magic);
-  return [lng + dLng * 180 / (GCJ_A / sq * Math.cos(rad) * Math.PI),
-          lat + dLat * 180 / (GCJ_A * (1 - GCJ_EE) / (magic * sq) * Math.PI)];
-}
-
-// 折线点 [lng, lat, stopOrder] → 同结构、已转 GCJ。取到折线时转一次，下游全程 GCJ。
-const toGCJ = (track) => track.map((p) => {
-  const [lng, lat] = wgs2gcj(p[0], p[1]);
-  return [lng, lat, p[2]];
-});
-
-const BUS_D = 'M2 2h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm0 1v5h12V3H2zm1 7.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm10 0a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z';
-
-/* ── 高德底图 ─────────────────────────────────────────────────────── */
-// 实例只建一次：重建会丢掉瓦片缓存与相机位置。换线路只换覆盖物。
-let amap = null;
-let overlay = [];        // 当前线路的覆盖物，重绘前整批摘掉
-let amapLoading = null;  // 首次加载高德脚本的 promise，复用避免重复插 script
-let mapSeq = 0;          // 渲染序号：异步等脚本期间若有更新的渲染排队，这次作废
-let fitted = '';         // 已经 setFitView 过的「线路:方向」；见 renderMap 里为什么需要它
-
-const mapStyle = () => (document.documentElement.dataset.theme === 'light'
-  ? 'amap://styles/normal' : 'amap://styles/dark');
-
-function loadAmapScript() {
-  const cfg = window.YBA_AMAP || {};
-  if (!cfg.key) return Promise.reject(new Error('服务端未配置高德 key（YBA_AMAP_KEY）'));
-  if (cfg.security) window._AMapSecurityConfig = { securityJsCode: cfg.security };
-  return new Promise((ok, no) => {
-    const s = document.createElement('script');
-    s.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(cfg.key);
-    s.onload = ok;
-    s.onerror = () => no(new Error('高德脚本加载失败'));
-    document.head.append(s);
-  });
-}
-
-function ensureMap() {
-  if (!amapLoading) {
-    amapLoading = loadAmapScript().then(() => {
-      amap = new AMap.Map('map', {
-        viewMode: '2D', zoom: 15, center: [110.1584, 22.5978], mapStyle: mapStyle(),
-      });
-      amap.on('click', () => deselect());   // 点空白处取消选中
-    });
-  }
-  return amapLoading;
-}
-
-function clearOverlay() {
-  // ponytail: 每次刷新整批摘掉重建覆盖物。几十个 Marker，10 秒一次，暂时不值
-  // 得拆成「站点只建一次、只动车辆」。副作用是刷新瞬间落下的那次点击会落空、
-  // 悬停态被清掉；真要修就把车辆 Marker 单独拎出来只更新 position。
-  if (overlay.length) { amap.remove(overlay); overlay = []; }
-}
-
-// 覆盖物用自定义 content 而不是高德内置图标：直接吃页面 CSS 变量，跟着主题走。
-function stopContent(kind, label) {
-  const box = el('div', 'am-stop' + kind);
-  if (label != null) box.append(el('span', 'am-lab', label));
-  return box;
-}
-
-/* ── 地图 ─────────────────────────────────────────────────────────── */
-// 线路是双向的，地图与到站列表一次只画一个方向。方向按优先级取：
-// 选中的站（点地图或走向条都会选中）> #dirs 上手动切的方向 > 第一个方向。
+// 线路是双向的，页面一次只画一个方向。方向按优先级取：
+// 选中的站（点走向条会选中）> 手动切的方向 > 第一个方向。
 function focusDir() {
   const want = sel ? sel.lineId : focusId;
   if (want) {
@@ -359,70 +196,65 @@ function focusDir() {
   return detail[0];
 }
 
-// 方向切换。没有它就只能靠「点走向条上另一条轨的站」来换向 —— 那个入口
-// 藏在侧栏最底下，等于没有。
-function renderDirs() {
-  const box = $('#dirs');
-  box.textContent = '';
-  if (detail.length < 2) return;   // 单向线没什么可切的
-  const cur = focusDir();
-  for (const it of detail) {
-    const b = el('button', it === cur ? 'on' : null);
-    b.type = 'button';
-    b.append(el('span', 'tt', `开往 ${it.dir.end}`));
-    b.append(el('span', 'ss', `${(it.rt.buses || []).length} 辆`));
-    b.addEventListener('click', () => setFocus(it.dir.lineId));
-    box.append(b);
+// 默认选中的站：取「首车还在前面一站」的那站 —— 样张就是这个视角（还有 1 个站）。
+// 没有在线车就退回首站。
+function defaultStop(it) {
+  const bs = it.rt.buses || [];
+  if (!bs.length) return it.stops[0];
+  const lead = Math.max(...bs.map((b) => b.order));
+  return it.stops.find((s) => s.order === lead + 1) ||
+         it.stops.find((s) => s.order === lead) || it.stops[0];
+}
+
+function ensureSel(it) {
+  if (sel && sel.lineId === it.dir.lineId && it.stops.some((s) => s.order === sel.order)) return;
+  sel = { lineId: it.dir.lineId, order: defaultStop(it).order };
+}
+
+// 反向的那条线路：起终点正好调过来。
+function reverseDir(it) {
+  return detail.find((x) => x !== it &&
+    x.dir.start === it.dir.end && x.dir.end === it.dir.start) || null;
+}
+
+// 「反方向站点」找的是这一站在反向线路里的同一站，按站名找 —— 不是把方向一切了事。
+// 上游两边站名偶尔差个括注（玉林技师学院 / 玉林技师学院（市一职中）），所以先精确
+// 匹配、再去括注匹配，且只在反向线路里唯一命中才算数。找不到就是单边站，这功能不适用。
+function oppositeStop(it, s) {
+  const rev = reverseDir(it);
+  if (!rev || !s) return null;
+  let t = rev.stops.find((x) => x.name === s.name);
+  if (!t) {
+    const core = (n) => n.replace(/[（(][^）)]*[）)]/g, '').trim();
+    const cand = rev.stops.filter((x) => core(x.name) === core(s.name));
+    if (cand.length === 1) t = cand[0];
   }
+  // ponytail: 同方向重复出现同名站（环线）时取第一个，玉林没有这种线
+  return t ? { dir: rev, stop: t } : null;
 }
 
-function setFocus(lineId) {
-  if (focusId === lineId && !sel) return;
-  focusId = lineId;
-  sel = null;                                   // 选中的站在另一个方向上，不再成立
-  fitted = '';                                  // 换方向要重新定视野
-  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
-  if (isMobile()) hideCard();
-  renderShifts();   // 班次按钮上的起讫时间也跟着方向
-  renderDirs();
-  renderArr();
-  renderMeta();     // 首末班跟着方向走
-  renderMap();
-  renderCard();
+// 变体切换（日班↔夜班、普通↔定制），按钮就在标签行里。变体是另一套 lineId ——
+// 车辆、终点、首末班都不一样，日班/普通里看不到。
+function setShift(s) {
+  if (shift === s || !shifts[s].length) return;
+  const was = detail.length ? focusDir().dir : null;
+  shift = s;
+  detail = shifts[s];
+  // 变体方向的排列顺序跟基本班不一样（G02 定制先列总站→北站），按起终点把同一个
+  // 走向找回来 —— 否则一点切换就翻到反方向去了
+  // 没有完全同走向的（6 路的日班与夜班跑的是不同路段），就按终点找：至少方向朝哪边不变
+  const keep = was && (detail.find((it) => it.dir.start === was.start && it.dir.end === was.end)
+                    || detail.find((it) => it.dir.end === was.end));
+  focusId = keep ? keep.dir.lineId : null;
+  sel = null;
+  busSel = null;
+  railScrollPending = true;
+  renderAll();
 }
 
-// 状态胶囊。班次/方向一变就得重画：setShift 不重画的话，顶部会留着上一个班次的状态。
-function renderState() {
-  if (!detail.length) return;
-  const [cls, txt] = stateOf((detail.find((it) => it.rt.state === 0) || detail[0]).rt);
-  $('#state').className = 'pill ' + cls;
-  $('#statetxt').textContent = txt;
-}
-
-// 班次切换（日班/夜班）。只有 6 路有夜班：夜班站表是日班的前缀，
-// 但车辆、终点、首末班都是另一套 lineId，日班里看不到。
-function renderShifts() {
-  const box = $('#shifts');
-  box.textContent = '';
-  const g = routes.find((r) => r.name === current);
-  if (!g || !g.night.length) return;
-  const end = focusDir().dir.end;   // 按钮上的起讫时间跟着当前方向走
-
-  for (const [k, label, ls] of [['day', '日班', g.dirs], ['night', '夜班', g.night]]) {
-    const b = el('button', shift === k ? 'on' : null);
-    b.type = 'button';
-    b.append(el('span', 'tt', label));
-    b.append(el('span', 'ss', spanOf(ls, end)));
-    b.addEventListener('click', () => setShift(k));
-    box.append(b);
-  }
-}
-
-const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-
-// 班次的起讫时间。优先取「终点与当前方向相同」的那条 —— 日班和夜班的方向集合
+// 变体的起讫时间。优先取「终点与当前方向相同」的那条 —— 变体与基本班的方向集合
 // 不一样（夜班只开到马尔代夫水上乐园），按序号对不上同一走向，只能按终点名找；
-// 该班次没有这个走向就退回整班次的并集。
+// 该变体没有这个走向就退回整变体的并集。
 function spanOf(ls, end) {
   const same = ls.filter((d) => d.end === end);
   const use = same.length ? same : ls;
@@ -430,313 +262,291 @@ function spanOf(ls, end) {
          `${hhmm(Math.max(...use.map((d) => hm(d.lastTime))))}`;
 }
 
-function setShift(s) {
-  if (shift === s || !shifts[s].length) return;
-  shift = s;
-  detail = shifts[s];
-  sel = null;          // 选中的站在另一个班次的方向上，不再成立
-  focusId = null;
-  fitted = '';         // 班次换了，重新定视野
-  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
-  if (isMobile()) hideCard();
-  renderState();
-  renderShifts();
-  renderDirs();
-  renderArr();
-  renderMeta();
-  renderRails();
-  renderMap();
-  renderCard();
+function renderHead(it) {
+  $('#dTitle').textContent = titleOf(current);
+  $('#dFrom').textContent = it.dir.start;
+  $('#dTo').textContent = it.dir.end;
 }
 
-async function renderMap() {
-  const hint = $('#hint');
-  const seq = ++mapSeq;
-  try {
-    await ensureMap();
-  } catch (e) {
-    hint.hidden = false;
-    hint.textContent = `底图不可用：${e.message}`;
-    return;
+// 标签行：首末班 / 票价 / 总站数 / 变体切换 / 运营状态。
+function renderTags(it) {
+  const box = $('#tags');
+  box.textContent = '';
+  const g = routes.find((r) => r.name === current);
+  box.append(el('span', 'tg f', `首 ${it.dir.firstTime}`));
+  box.append(el('span', 'tg l', `末 ${it.dir.lastTime}`));
+  if (it.rt.price) box.append(el('span', 'tg', `票价 ${it.rt.price}`));
+  box.append(el('span', 'tg', `总共 ${it.stops.length} 站`));
+  if (g && g.alt && g.alt.dirs.length) {
+    const altOn = shift === 'alt';
+    const b = el('button', 'tg act' + (altOn ? ' off' : ''),
+      `${altOn ? g.alt.label : g.alt.base} ${spanOf(altOn ? g.alt.dirs : g.dirs, it.dir.end)}`);
+    b.type = 'button';
+    b.title = altOn ? `切成${g.alt.base}` : `切成${g.alt.label}`;
+    b.addEventListener('click', () => setShift(altOn ? 'day' : 'alt'));
+    box.append(b);
   }
-  if (seq !== mapSeq) return;   // 期间有更新的渲染，这次作废
-  clearOverlay();
-  if (!detail.length) return;
+  const [cls, txt] = stateOf(it.rt);
+  if (cls === 'idle' || cls === 'off') box.append(el('span', 'tg ' + cls, txt));
+}
 
-  const it = focusDir();
-  const track = it.track || [];
-  if (!track.length || !it.stops.length) {
-    hint.hidden = false;
-    hint.textContent = '这条线路没有走向数据';
-    return;
-  }
-
-  const idx = trackIdx(track, it.rt.stopPos);
-  const nightOn = !!(night && nowMin() >= night.from && nowMin() <= night.to);
+// 样张那句「当前有 N 辆车在行驶」；这个方向没车时改说运营状态，不硬报 0。
+function renderCount(it) {
+  const box = $('#count');
+  box.textContent = '';
   const buses = it.rt.buses || [];
+  if (buses.length) {
+    box.append(document.createTextNode('当前有 '), el('b', 'box', String(buses.length)),
+               document.createTextNode(' 辆车在行驶'));
+    return;
+  }
+  box.textContent = `当前${stateOf(it.rt)[1]}`;
+}
+
+// 最近一辆还没过该站的车，以及它离该站还有几站。
+function upcoming(it, s) {
+  let best = null;
+  for (const b of (it.rt.buses || [])) {
+    if (b.order > s.order) continue;              // 已过该站
+    if (!best || b.order > best.order) best = b;
+  }
+  return best ? { bus: best, left: s.order - best.order } : null;
+}
+
+// 站点卡：样张里那块浅底卡片 —— 站名 +「下一辆还有 N 个站，到达该站！」。
+// N = 站序 − 最近一辆没过该站的车的站序。车在「正在接近的站」上，所以差 1 就是
+// 「还有 1 个站」。纯前端算，不多打请求。
+function renderStation() {
+  const box = $('#scard');
+  box.textContent = '';
+  box.classList.toggle('follow', !!busSel || busListOpen);
+  if (!detail.length) return;
+  const it = focusDir();
+  ensureSel(it);   // sel 可能刚被清掉（点过车/从跟踪页返回），别退成一张空卡
+  if (busSel && busSel.lineId === it.dir.lineId) return renderFollow(box, it, busSel.fleetNo);
+  if (busListOpen) return renderBusList(box, it);
+
+  const s = it.stops.find((x) => x.order === sel.order);
+  if (!s) return;
+  box.append(el('div', 'sn', s.name));
+
+  const up = upcoming(it, s);
+  const hint = el('div', 'hint');
+  if (up && up.left > 0) {
+    hint.append(document.createTextNode('下一辆还有 '), el('b', 'box', String(up.left)),
+                document.createTextNode(' 个站，到达该站！'));
+  } else if (up) {
+    // 车在「本站」有两种：正在接近（state=0）和已经停下（state=1），
+    // 上游给的 order 都一样，只能看 state。
+    hint.textContent = up.bus.state === 1 ? '车辆已到站！' : '车辆正在进站！';
+  } else {
+    hint.classList.add('mute');
+    hint.textContent = (it.rt.buses || []).length ? '当前车辆均已过该站' : `当前${stateOf(it.rt)[1]}`;
+  }
+  box.append(hint);
+
+  // 点站后单独问一次上游（targetOrder 把 ETA 算到这一站），到了才出这条
+  const rt = stopCache.get(`${it.dir.lineId}:${s.order}`);
+  const b = rt && (rt.buses || []).filter((x) => x.order <= s.order && x.eta > 0)
+    .sort((x, y) => etaKey(x) - etaKey(y))[0];
+  if (b) box.append(el('div', 'sub', `${b.fleetNo} 号车 · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
+}
+
+// 车辆跟踪页：点走向条上的车进这里（替掉站点卡）。
+// 上游 travels 一次只给一条（目标站），逐站 ETA 要按站问几十次 —— 不做。
+// 这里只摆已有的事实：已过 / 正在接近（或已到站）/ 未到，加上车速与到终点的 ETA。
+function renderFollow(box, it, fleetNo) {
+  const back = el('button', 'back2');
+  back.type = 'button';
+  back.append(icon('M15 4 7 12l8 8'), el('span', null, busListOpen ? '返回车辆列表' : '返回站点'));
+  back.addEventListener('click', () => { busSel = null; renderStation(); renderRail(); });
+  box.append(back);
+
+  const b = (it.rt.buses || []).find((x) => x.fleetNo === fleetNo);
+  const h = el('div', 'h');
+  h.append(el('b', null, `${fleetNo} 号车`), el('span', null, `开往 ${it.dir.end}`));
+  box.append(h);
+  if (!b) { box.append(el('div', 'sub', '这辆车已不在线上（收班或已到终点）。')); return; }
+
+  const left = Math.max(0, it.stops.length - b.order);
+  const sub = [b.state === 1 ? '已到站' : (b.speed > 0 ? `${b.speed.toFixed(1)} km/h` : '在途'),
+               left > 0 ? `距终点 ${left} 站` : '已到终点'];
+  if (b.eta > 0) {
+    sub.push(mins(b.eta));                       // 默认请求下 ETA 是到终点的
+    if (b.arriveAt) sub.push(`${b.arriveAt} 到`);
+  }
+  if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
+  box.append(el('div', 'sub', sub.join(' · ')));
+
+  const list = el('div', 'jrn');
+  for (const s of it.stops) {
+    const r = el('div', 'jrow' + (s.order < b.order ? ' pass' : s.order === b.order ? ' next' : ''));
+    r.append(el('i', 'jdot'), el('span', 'jnm', s.name));
+    if (s.order === b.order) r.append(el('span', 'at', b.state === 1 ? '已到站' : '正在接近'));
+    list.append(r);
+  }
+  box.append(list);
+  const cur = list.querySelector('.jrow.next');
+  if (cur) cur.scrollIntoView({ block: 'center' });   // 40+ 站的长线，直接滚到它现在那段
+}
+
+// 车辆列表：以当前选中的站为准，一辆一行列出它到这个站的倒计时。
+// 倒计时只能来自带 targetOrder 的那次请求（不带时 eta 的语义是「到终点」）——
+// 正是点站时 selectStop 取回来的那份，缓存在 stopCache 里，这里不再打请求。
+function renderBusList(box, it) {
+  const back = el('button', 'back2');
+  back.type = 'button';
+  back.append(icon('M15 4 7 12l8 8'), el('span', null, '返回站点'));
+  back.addEventListener('click', () => { busListOpen = false; renderStation(); });
+  box.append(back);
+
+  const s = it.stops.find((x) => x.order === sel.order);
+  if (!s) return;
+  const rt = stopCache.get(`${it.dir.lineId}:${s.order}`);
+  const h = el('div', 'h');
+  h.append(el('b', null, `到「${s.name}」`), el('span', null, `共 ${(rt && rt.buses || []).length} 辆`));
+  box.append(h, el('div', 'sub', `开往 ${it.dir.end}`));
+  if (!rt) { box.append(el('div', 'sub', '读取到站时间…')); return; }
+  const bs = (rt.buses || []).slice();
+  if (!bs.length) { box.append(el('div', 'sub', `当前${stateOf(rt)[1]}。`)); return; }
+
+  // 没过该站的按到站先后排前面，已过的沉到最后
+  const passed = (b) => b.order > s.order;
+  bs.sort((a, b) => (passed(a) - passed(b)) || (etaKey(a) - etaKey(b)));
+
+  for (const b of bs) {
+    const over = passed(b);
+    const left = s.order - b.order;
+    const etaTxt = over ? '已过站' : b.eta > 0 ? mins(b.eta)
+      : b.state === 1 ? '已到站' : '即将到站';
+    const atStop = b.state === 1;   // 已到站由右边的倒计时列说，这里就不再重复
+    const sub = [over ? '已过该站' : atStop ? null : (left > 0 ? `还有 ${left} 站` : '正在进站'),
+                 atStop ? null : (b.speed > 0 ? `${b.speed.toFixed(1)} km/h` : '在途')].filter(Boolean);
+    if (b.arriveAt) sub.push(`${b.arriveAt} 到`);
+    if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
+    const txt = el('div', 'vtxt');
+    const top = el('div', 'vh');
+    top.append(el('b', null, `${b.fleetNo} 号车`), el('span', 'eta', etaTxt));
+    txt.append(top, el('div', 'vs', sub.join(' · ')));
+    const row = el('button', 'vrow' + (over ? ' pass' : ''));
+    row.type = 'button';
+    row.append(busIcon(), txt);
+    row.addEventListener('click', () => selectBus(it, b));   // 与点走向条上的车同一条路
+    box.append(row);
+  }
+}
+
+/* ── 走向条 ───────────────────────────────────────────────────────── */
+/* 竖排站名 + 绿轴 + 车辆按 (order, pos) 插在两站之间。
+   车辆 chip 挂在它「正在接近的站」那一格里，再用 --p 往左退回站间：
+   p=1 落在站上，p=0 落在上一站。 */
+function renderRail() {
+  const rail = $('#rail');
+  rail.textContent = '';
+  if (!detail.length) return;
+  const it = focusDir();
+  const altOn = !!(altSvc && nowMin() >= altSvc.from && nowMin() <= altSvc.to);
   const byOrder = new Map();
-  for (const b of buses) {
+  for (const b of (it.rt.buses || [])) {
     if (!byOrder.has(b.order)) byOrder.set(b.order, []);
     byOrder.get(b.order).push(b);
   }
 
-  // showDir 让折线自己带方向箭头，省掉手画箭头那段几何
-  overlay.push(new AMap.Polyline({
-    path: track.map((p) => [p[0], p[1]]),
-    strokeColor: lineColor(current || ''), strokeWeight: 6, strokeOpacity: 0.85,
-    lineJoin: 'round', lineCap: 'round', showDir: true, zIndex: 50,
-  }));
-
+  let selCell = null;
   for (const s of it.stops) {
-    const spot = track[stopIdx(track, idx, s.order)];
-    const term = s.order === it.stops[0].order || s.order === it.stops[it.stops.length - 1].order;
-    const skip = nightOn && !night.stops.has(s.name);
+    const skip = altOn && !altSvc.stops.has(s.name);
     const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
-    let kind = '';
-    if (skip) kind += ' skip';
-    if (term) kind += ' term';
-    if (on) kind += ' on';
-    // 每站都标名字。43 站的长线会挤，靠 .am-lab 的底色小片互相压住还算能看；
-    // 真嫌糊就把这里收回去：只标首末站/选中站/此刻有车的站（原来的做法）。
-    const box = stopContent(kind, s.name);
-    const m = new AMap.Marker({
-      position: [spot[0], spot[1]], anchor: 'center', content: box,
-      zIndex: on ? 120 : term ? 110 : 100, cursor: 'pointer',
-      title: skip ? `${s.name}（夜班不停）` : s.name,
+    const cell = el('div', 'stn' + (skip ? ' skip' : '') + (on ? ' on' : ''));
+    // 站点就是站点：方块里不放公交车图标，车才用那个图标（走向条上的色块、车辆列表）
+    cell.append(el('i', 'bx'), el('span', 'nm', s.name));
+    cell.title = skip ? `${s.name}（${altSvc.label}不停）` : s.name;
+    // 同站两辆车会叠在一起（没做纵向分道）—— 实际很少见，先不管
+    for (const b of (byOrder.get(s.order) || [])) {
+      const chip = el('span', 'bus' + (busSel && busSel.fleetNo === b.fleetNo ? ' on' : ''));
+      chip.style.setProperty('--p', String(b.pos));
+      chip.append(busIcon(), el('span', null, b.fleetNo));
+      chip.title = `${b.fleetNo} · ${b.state === 1 ? '已到' : '前往'} ${s.name}`;
+      chip.addEventListener('click', (e) => { e.stopPropagation(); selectBus(it, b); });
+      cell.append(chip);
+    }
+    cell.tabIndex = 0;
+    const pick = () => { busListOpen = false; selectStop(it, s); };   // 点站 = 要站点卡
+    cell.addEventListener('click', pick);
+    cell.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
     });
-    m.on('click', () => selectStop(it, s));
-    overlay.push(m);
+    if (on) selCell = cell;
+    rail.append(cell);
   }
-
-  for (const b of buses) {
-    const p = busPoint(track, idx, b.order, b.pos);
-    const box = el('div', 'am-bus');
-    box.append(busIcon());
-    overlay.push(new AMap.Marker({
-      position: [p[0], p[1]], anchor: 'center', content: box, zIndex: 200,
-      title: `${b.fleetNo} · 前往 ${it.stops.find((s) => s.order === b.order)?.name || '下一站'}`,
-    }));
-  }
-
-  amap.add(overlay);
-  // setFitView 只在换线路/换方向时跑一次。每 10 秒刷新都调的话，用户刚拖好、
-  // 缩放好的视野会在下次刷新被拽回去 —— 车在动不等于视野要动。
-  const key = `${current || ''}:${it.dir.lineId}`;
-  if (key !== fitted) {
-    // 第二个参数是 immediately=true：不要动画。实测这台机器上动画要跑 4 秒多，
-    // 期间站点标记一直在移动，点它就是点空 —— 手机上（走隧道）这个窗口更难受。
-    amap.setFitView(overlay, true, [70, 70, 70, 70], 16);
-    fitted = key;
-  }
-  hint.hidden = true;
-}
-
-/* ── 侧栏：实时到站 / 本线信息 / 走向条 ───────────────────────────── */
-// 到站卡按 ETA 升序。「还有 N 站」用 target−order：上游没传 targetOrder 时
-// target 就是终点站序。
-function renderArr() {
-  const box = $('#arr');
-  box.textContent = '';
-  if (!detail.length) { box.append(el('div', 'note', '左侧选一条线路。')); return; }
-
-  const it = focusDir();
-  const buses = (it.rt.buses || []).slice().sort((a, b) => etaKey(a) - etaKey(b));
-  if (!buses.length) {
-    const [, txt] = stateOf(it.rt);
-    box.append(el('div', 'note', txt === '运营中' ? `${it.dir.end} 方向暂无在线车辆。` : txt));
-    return;
-  }
-  for (const b of buses) {
-    // 「距终点 N 站」用站表总数减当前站序。上游的 targetOrder 是「下一站」而不是
-    // 终点，拿它减 order 恒为 0（实测三辆车全是「还有 0 站」）。
-    const left = Math.max(0, it.stops.length - b.order);
-    let cls = 'acard';
-    if (!(b.eta > 0)) cls += ' gone';
-    else if (b.eta <= 180) cls += ' soon';
-    const c = el('div', cls);
-
-    // 这里不放线路徽章：整个分区就一条线一个方向，上面那组方向按钮已经写明了，
-    // 每张卡再挂一个同样的徽章只是占掉一行文字的位置。
-    const d = el('div', 'dest');
-    d.append(el('b', null, `开往 ${it.dir.end}`));
-    const sub = [`${b.fleetNo} 号车`, left > 0 ? `距终点 ${left} 站` : '已到终点'];
-    if (b.eta > 0 && b.arriveAt) sub.push(`${b.arriveAt} 到`);
-    if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
-    d.append(el('span', null, sub.join(' · ')));
-    c.append(d);
-
-    c.append(el('span', 'eta', mins(b.eta)));
-    box.append(c);
+  // 只在换线路/换班次/换方向时滚一次 —— 每 10 秒刷新都滚会把用户拖的横向位置拽回去。
+  if (railScrollPending && selCell) {
+    selCell.scrollIntoView({ inline: 'center', block: 'nearest' });
+    railScrollPending = false;
   }
 }
 
-// 本线信息：跟着方向切换走 —— 只显示当前方向的首末班/票价/状态。
-// 票价只有实时接口给（线路静态接口没有）。
-function renderMeta() {
-  const box = $('#meta');
-  box.textContent = '';
-  if (!detail.length) return;
-  const it = focusDir();
-  const [cls, txt] = stateOf(it.rt);
-  box.append(el('div', 'k txt', '方向'));
-  box.append(el('div', 'v txt', `${it.dir.start} → ${it.dir.end}`));
-  box.append(el('div', 'k txt', '首末班'));
-  box.append(el('div', 'v', `${it.dir.firstTime}–${it.dir.lastTime}`));
-  box.append(el('div', 'k txt', '票价'));
-  box.append(el('div', 'v', it.rt.price || '—'));
-  box.append(el('div', 'k txt', '当前状态'));
-  box.append(el('div', 'v txt ' + cls, txt));
-}
-
-function renderCard() {
-  const box = $('#businfo');
-  box.textContent = '';
-  if (!detail.length) { hideCard(); return; }
-
-  const it = focusDir();
-  const h = el('div', 'h');
-
-  if (!sel) {
-    h.append(el('span', 'stn', current || '线路'));
-    h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
-    box.append(h);
-    box.append(el('div', 'note', '点地图或走向条上的站点，看车还有多久到。'));
-    return;
-  }
-
-  const s = it.stops.find((x) => x.order === sel.order);
-  if (!s) return;
-  h.append(el('span', 'stn', s.name));
-  h.append(el('span', 'dir', `${it.dir.start} → ${it.dir.end}`));
-  box.append(h);
-
-  const cached = stopCache.get(`${it.dir.lineId}:${s.order}`);
-  const rows = el('div', 'rows');
-  rows.id = 'rows';
-  if (cached === undefined) rows.append(el('div', 'note', '查询中…'));
-  else fillRows(rows, cached);
-  box.append(rows);
-}
-
-function fillRows(rows, rt) {
-  rows.textContent = '';
-  const buses = (rt.buses || []).slice().sort((a, b) => etaKey(a) - etaKey(b));
-  if (!buses.length) {
-    rows.append(el('div', 'note', '该方向当前没有在线车辆。'));
-    return;
-  }
-  for (const b of buses) {
-    const r = el('div', 'row');
-    r.append(el('span', 'fno', b.fleetNo));
-    r.append(el('span', 'eta', mins(b.eta)));
-    if (b.eta > 0 && b.arriveAt) r.append(el('span', 'at', b.arriveAt));
-    rows.append(r);
-  }
-}
-
-/* ── 选中站点 → 各车到该站还有多久 ───────────────────────────────── */
+/* ── 交互 ─────────────────────────────────────────────────────────── */
+// 点站：这站成为当前站，并单独问一次上游拿「到该站」的 ETA。
 async function selectStop(it, s) {
   sel = { lineId: it.dir.lineId, order: s.order };
-  focusId = it.dir.lineId;   // 点哪条轨的站就把方向切过去，与 #dirs 的选中态保持一致
-  document.querySelectorAll('.rstop.on').forEach((x) => x.classList.remove('on'));
-  document.querySelectorAll(`.rstop[data-line="${it.dir.lineId}"][data-order="${s.order}"]`)
-    .forEach((x) => x.classList.add('on'));
-  showCard();
-  renderShifts();
-  renderDirs();   // 方向变了，切换器的选中态与到站列表都要跟上
-  renderArr();
-  renderMeta();
-  renderMap();
-  renderCard();
+  busSel = null;
+  focusId = it.dir.lineId;   // 点哪个方向上的站就把方向切过去
+  renderAll();
 
   const key = `${it.dir.lineId}:${s.order}`;
   if (stopCache.has(key)) return;
-
   try {
-    // targetOrder 让上游把 ETA 算到该站，而不是终点站。
     const rt = await api(`/lines/${encodeURIComponent(it.dir.lineId)}/realtime?targetOrder=${s.order}`);
     stopCache.set(key, rt);
-    // 期间用户可能已经点了别的站，或刷新过（缓存会清空）
+    // 期间用户可能点了别的站，或换线路/刷新过（缓存会清空）
     if (!sel || sel.lineId !== it.dir.lineId || sel.order !== s.order) return;
     if (!stopCache.has(key)) return;
-    const rows = $('#rows');
-    if (rows) fillRows(rows, rt);
+    renderStation();
   } catch (e) {
-    const rows = $('#rows');
-    if (rows) { rows.textContent = ''; rows.append(el('div', 'note bad', `取到站数据失败：${e.message}`)); }
+    $('#scard').append(el('div', 'sub', `取到站数据失败：${e.message}`));
   }
 }
 
-/* ── 走向条（侧栏「线路走向」段）：两方向共用一条轴，各占一条轨 ───────
-   每轨按自己的行车顺序排；中间站只是大致对齐 —— 22 条线里只有 1 条两方向严格互逆。
-   它也是切换地图方向的入口：点另一条轨上的站，地图就切过去。 */
-function renderRails() {
-  const box = $('#rails');
-  box.textContent = '';
+function selectBus(it, b) {
+  busSel = { lineId: it.dir.lineId, fleetNo: b.fleetNo };
+  sel = null;
+  focusId = it.dir.lineId;
+  renderStation();
+  renderRail();
+}
+
+function toggleFav() {
+  if (!current) return;
+  if (favs.has(current)) favs.delete(current); else favs.add(current);
+  localStorage.setItem(favKey, JSON.stringify([...favs]));
+  renderFav();
+  renderLines($('#q').value);
+}
+
+function renderFav() {
+  const on = favs.has(current);
+  $('#btnFav').classList.toggle('on', on);
+  $('#favTxt').textContent = on ? '已收藏' : '收藏路线';
+}
+
+function renderAll() {
   if (!detail.length) return;
-  const nightOn = !!(night && nowMin() >= night.from && nowMin() <= night.to);
-  for (const it of detail) {
-    const { dir, stops, rt } = it;
-    const rb = el('div', 'railbox');
-
-    const head = el('div', 'railhead');
-    const [cls, txt] = stateOf(rt);
-    head.append(el('span', 'dir', `${dir.start} → ${dir.end}`));
-    head.append(el('span', 'st ' + cls, txt));
-    head.append(el('span', 'cnt', `${stops.length} 站 · ${(rt.buses || []).length} 辆`));
-    if (nightOn) head.append(el('span', 'legend', '红字 = 夜班不停'));
-    rb.append(head);
-
-    const byOrder = new Map();
-    for (const b of (rt.buses || [])) {
-      if (!byOrder.has(b.order)) byOrder.set(b.order, []);
-      byOrder.get(b.order).push(b);
-    }
-
-    const scroll = el('div', 'railscroll');
-    const rail = el('div', 'rail');
-    stops.forEach((s, i) => {
-      // 注意别写成 'rstop' + (cond ? ' term' : null) —— 假分支会拼出 "rstopnull"
-      const term = i === 0 || i === stops.length - 1;
-      const skip = nightOn && !night.stops.has(s.name);
-      let cls2 = term ? 'rstop term' : 'rstop';
-      if (skip) cls2 += ' skip';
-      if (sel && sel.lineId === dir.lineId && sel.order === s.order) cls2 += ' on';
-      const st = el('div', cls2);
-      const wrap = el('div', 'rbuswrap');
-      for (const b of (byOrder.get(s.order) || [])) {
-        const chip = el('span', 'rbus');   // 只是标记，点击冒泡到站点
-        chip.append(busIcon(), el('span', null, b.fleetNo));
-        chip.title = `${b.fleetNo} · ${b.pos >= 1 ? '已到' : '前往'} ${s.name}`;
-        wrap.append(chip);
-      }
-      st.append(wrap);
-      st.append(el('i', 'dot'));
-      const nm = el('span', 'nm', s.name);
-      nm.title = skip ? `${s.name}（夜班不停）` : s.name;   // 超两行被截时也能看全
-      st.append(nm);
-      st.tabIndex = 0;
-      st.dataset.line = dir.lineId;
-      st.dataset.order = s.order;
-      st.addEventListener('click', () => selectStop(it, s));
-      st.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectStop(it, s); }
-      });
-      rail.append(st);
-    });
-    scroll.append(rail);
-    rb.append(scroll);
-    box.append(rb);
-  }
+  const it = focusDir();
+  ensureSel(it);
+  renderHead(it);
+  renderTags(it);
+  renderCount(it);
+  renderFav();
+  // 换向按钮只在这条线根本没有反方向时才灰 —— 当前这站是单边站也照样可点（见 goOpposite），
+  // 灰着会被当成「没这个功能」。
+  const canFlip = !!reverseDir(it);
+  $('#btnDir').disabled = !canFlip;
+  $('#btnTurn').disabled = !canFlip;
+  renderStation();
+  renderRail();
 }
 
-function busIcon() {
-  const svg = svgEl('svg', { viewBox: '0 0 16 16', fill: 'currentColor' });
-  svg.append(svgEl('path', { d: BUS_D }));
-  return svg;
-}
-
-/* ── 刷新 ─────────────────────────────────────────────────────────── */
+/* ── 取数 ─────────────────────────────────────────────────────────── */
 async function refresh() {
   if (!current) return;
   const g = routes.find((r) => r.name === current);
@@ -744,82 +554,97 @@ async function refresh() {
   const wanted = g.name;
   try {
     // 日班与夜班一起取：夜班是另一套 lineId，不取就看不到夜班的车
-    const all = [...g.dirs, ...g.night];
+    const all = [...g.dirs, ...(g.alt ? g.alt.dirs : [])];
     const got = await Promise.all(all.map(async (d) => {
       const [r, rt] = await Promise.all([
         api(`/lines/${encodeURIComponent(d.lineId)}`),
         api(`/lines/${encodeURIComponent(d.lineId)}/realtime`),
       ]);
-      return { dir: d, stops: r.stops || [], track: toGCJ(r.track || []), rt };
+      return { dir: d, stops: r.stops || [], rt };
     }));
     if (wanted !== current) return;   // 切线路时丢弃过期响应
-    shifts = { day: got.slice(0, g.dirs.length), night: got.slice(g.dirs.length) };
-    if (!shifts[shift].length) shift = 'day';   // 这条线没有夜班就回日班
+    shifts = { day: got.slice(0, g.dirs.length), alt: got.slice(g.dirs.length) };
+    if (!shifts[shift].length) shift = 'day';   // 这条线没有这个变体就回日班/普通
     detail = shifts[shift];
     stopCache.clear();                // 数据变了，到站缓存作废
 
-    // 夜班站表直接从刚取到的夜班数据里来（原来为了拿站表单独请求一遍）
-    night = g.night.length ? {
-      stops: new Set(shifts.night.flatMap((it) => it.stops.map((s) => s.name))),
-      from: Math.min(...g.night.map((d) => hm(d.firstTime))),
-      to: Math.max(...g.night.map((d) => hm(d.lastTime))),
+    // 夜班站表直接从刚取到的夜班数据里来
+    // 变体的服务时段与站表：标签行和走向条的「某站不停」标记都要用
+    altSvc = g.alt && g.alt.dirs.length ? {
+      label: g.alt.label,
+      stops: new Set(shifts.alt.flatMap((it) => it.stops.map((s) => s.name))),
+      from: Math.min(...g.alt.dirs.map((d) => hm(d.firstTime))),
+      to: Math.max(...g.alt.dirs.map((d) => hm(d.lastTime))),
     } : null;
 
-    g.online = [...shifts.day, ...shifts.night].reduce((n, it) => n + (it.rt.buses || []).length, 0);
-    renderState();
-    $('#upd').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-
-    $('#hint').hidden = true;
+    $('#upd').className = 'upd';
+    $('#upd').textContent = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · 车来了`;
     renderLines($('#q').value);
-    renderMap();
-    if (sel) {
-      const it = detail.find((x) => x.dir.lineId === sel.lineId);
-      if (it && it.stops.some((x) => x.order === sel.order)) await selectStop(it, it.stops.find((x) => x.order === sel.order));
-      else sel = null;
-    }
-    renderArr();
-    renderMeta();
-    renderRails();
-    renderShifts();
-    renderDirs();
-    renderCard();
+    renderAll();
+    if (!sel) return;
+    const it = detail.find((x) => x.dir.lineId === sel.lineId);
+    const s = it && it.stops.find((x) => x.order === sel.order);
+    if (s) await selectStop(it, s);   // 缓存已清，这里会重取一次该站的 ETA
+    else sel = null;
   } catch (e) {
-    $('#state').className = 'pill off';
-    $('#statetxt').textContent = '获取失败';
-    $('#hint').hidden = false;
-    $('#hint').textContent = `取实时数据失败：${e.message}`;
+    $('#upd').className = 'upd bad';
+    $('#upd').textContent = `取实时数据失败：${e.message}`;
+    renderAll();
   }
 }
 
 async function select(name) {
   current = name;
   sel = null;
+  busSel = null;
+  busListOpen = false;
   focusId = null;         // 换线路后回到第一个方向
-  shift = 'day';          // 以及日班（夜班站表/时段都由 refresh 里重建）
+  shift = 'day';          // 以及回到日班/普通（变体的站表与时段都由 refresh 重建）
+  detail = [];
+  shifts = { day: [], alt: [] };
   stopCache.clear();
-  closeDrawer();          // 移动端选完就收起抽屉
-  const g = routes.find((r) => r.name === name);
+  railScrollPending = true;
+  $('#dTitle').textContent = titleOf(name);
+  $('#count').textContent = '加载中…';
+  $('#scard').textContent = '';
+  $('#rail').textContent = '';
   renderLines($('#q').value);
-  $('#hint').hidden = false;
-  $('#hint').textContent = '加载中…';
-
   await refresh();
-  if (isMobile()) hideCard(); else { showCard(); renderCard(); }
 }
 
 async function boot() {
-  initTheme();
-  initDrawer();
-  initSheet();
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
+  $('#btnBack').addEventListener('click', () => history.back());
   $('#btnRefresh').addEventListener('click', () => { stopCache.clear(); refresh(); });
-  // 点地图空白处取消选中由高德的 map click 处理（见 ensureMap），这里不再重复监听
+  // 底栏「换向」和卡片下的「反方向站点」是同一件事，共用一个 handler。
+  // 有同名站就落到同名站；这站反向没有（单边站）就换向并落到那边的默认站 ——
+  // 总之一定换得过去，不会点了没反应。
+  const goOpposite = () => {
+    const it = focusDir();
+    const rev = reverseDir(it);
+    if (!rev) return;
+    const op = oppositeStop(it, it.stops.find((x) => x.order === sel.order));
+    railScrollPending = true;      // 方向换了，把落点那站滚进视野
+    selectStop(op ? op.dir : rev, op ? op.stop : defaultStop(rev));
+  };
+  $('#btnDir').addEventListener('click', goOpposite);
+  $('#btnTurn').addEventListener('click', goOpposite);
+  $('#btnBuses').addEventListener('click', () => {
+    busListOpen = true;
+    busSel = null;
+    const it = focusDir();
+    ensureSel(it);
+    renderRail();       // 清掉走向条上那辆车的选中态
+    selectStop(it, it.stops.find((x) => x.order === sel.order));   // 取「到该站」的倒计时
+  });
+  $('#btnFav').addEventListener('click', toggleFav);
+  window.addEventListener('hashchange', onHash);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   try {
     routes = groupByName(await api('/lines'));
     renderLines('');
-    if (routes.length) await select(routes[0].name);
-    timer = setInterval(refresh, REFRESH_MS);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    onHash();     // 直接开在线路页（带 hash）也能回到那条线
+    timer = setInterval(() => { if (current) refresh(); }, REFRESH_MS);
   } catch (e) {
     $('#lines').textContent = '';
     $('#lines').append(el('li', 'note bad', `取线路失败：${e.message}`));

@@ -14,9 +14,6 @@ import (
 // Config 是 handler 的依赖。
 type Config struct {
 	Upstream *upstream.Client
-	// AmapKey/AmapSecurity 由 main 从环境变量读入、经 /amap.js 下发前端。
-	AmapKey      string
-	AmapSecurity string
 }
 
 type handler struct {
@@ -28,7 +25,7 @@ func NewHandler(cfg Config) http.Handler {
 	h := &handler{up: cfg.Upstream}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.healthz)
-	panel.Routes(mux, cfg.AmapKey, cfg.AmapSecurity)
+	panel.Routes(mux)
 	mux.HandleFunc("GET /lines", h.lines)
 	mux.HandleFunc("GET /lines/{lineId}", h.route)
 	mux.HandleFunc("GET /lines/{lineId}/realtime", h.realtime)
@@ -44,6 +41,16 @@ func (h *handler) lines(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	// 静态目录里没有运营状态，把后台刷出来的贴上去（先进制造城专线这类名字没带停运的
+	// 线路，列表才标得出来）。先拷一份 —— 缓存里那份是共享的，不能在 handler 里改。
+	if st := h.up.LineStates(); len(st) > 0 {
+		v = append([]upstream.Line(nil), v...)
+		for i := range v {
+			if s, ok := st[v[i].LineID]; ok {
+				v[i].State, v[i].Desc, v[i].Count = s.State, s.Desc, s.Count
+			}
+		}
 	}
 	writeJSON(w, v)
 }
