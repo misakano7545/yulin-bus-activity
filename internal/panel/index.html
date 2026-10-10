@@ -282,10 +282,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .stn:hover .nm{color:var(--md-sys-color-on-surface)}
 .stn.on .bx{box-shadow:0 0 0 3px var(--md-sys-color-primary-container)}
 .stn.on .nm{color:var(--md-sys-color-primary);font-weight:700}
-/* 变体（夜班/定制）不停本站：整格压暗 —— 方块用 outline-variant、站名用 outline。
-   原来站名用的是 error 红，看着像这站停运/出故障；这里只是「这班车不停」。 */
-.stn.skip .bx{background:var(--md-sys-color-outline-variant)}
-.stn.skip .nm{color:var(--md-sys-color-outline)}
 /* 条件启用站（只在上学、放学时段停）：实心块改成空心环 —— 26px 下跟实心块一眼分得清 */
 .stn.cond .bx{background:var(--md-sys-color-surface);box-shadow:inset 0 0 0 3px var(--md-sys-color-primary)}
 /* 车辆：段内插值。--p 是站间比例（1 = 正在接近的那站），left 按格宽折成像素。

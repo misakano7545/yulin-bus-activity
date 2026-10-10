@@ -26,7 +26,6 @@ let focusId = null;   // 手动切到的方向（lineId）；null = 第一个方
 let shift = 'day';    // 'day' | 'alt'：日班/普通 vs 夜班/定制
 let shiftTouched = false;  // 用户手动切过变体 —— 之后日班收班也不自动切了
 let shifts = { day: [], alt: [] };
-let altSvc = null;    // 本线变体的服务：{label, stops:Set, from, to}；无变体则 null
 let timer = null;
 let stopCache = new Map();       // `${lineId}:${order}` → 该站的到站快照
 let railScrollPending = false;   // 换线路/换变体/换方向时把选中站滚进视野；10 秒刷新不滚
@@ -78,7 +77,7 @@ const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
 // 不按坐标：同一 id 在不同方向上的坐标能差 50m 以上（玉林师院东校区两个方向差 200m），
 // 距离法的阈值卡在「同站抖动」和「邻站间距」之间，两边会撞上。
 // ponytail: 只按核心名判。全市 14 组核心名相同的对里有几组确实是不同站台（汽车总站 3 个），
-// 但只有 6 路夜班、G02 定制这两条线用到这个判定，实测两组结果都跟站表条数差对得上，先走最简规则
+// 但只有 oppositeStop 找反向同名站这一处用到，先走最简规则
 const coreName = (n) => n.replace(/[（(][^）)]*[）)]/g, '').trim();
 
 // 运营状态：上游 state 0 正常 / -1 等待发车 / -2 临时停运 / -3 末班已过
@@ -490,7 +489,6 @@ function renderRail() {
   rail.textContent = '';
   if (!detail.length) return;
   const it = focusDir();
-  const altOn = !!(altSvc && nowMin() >= altSvc.from && nowMin() <= altSvc.to);
   const byOrder = new Map();
   for (const b of (it.rt.buses || [])) {
     if (!byOrder.has(b.order)) byOrder.set(b.order, []);
@@ -499,13 +497,12 @@ function renderRail() {
 
   let selCell = null;
   for (const s of it.stops) {
-    const skip = altOn && !altSvc.stops.has(coreName(s.name));
     const note = STOP_NOTES[s.name];
     const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
-    const cell = el('div', 'stn' + (skip ? ' skip' : '') + (note ? ' cond' : '') + (on ? ' on' : ''));
+    const cell = el('div', 'stn' + (note ? ' cond' : '') + (on ? ' on' : ''));
     // 站点就是站点：方块里不放公交车图标，车才用那个图标（走向条上的色块、车辆列表）
     cell.append(el('i', 'bx'), el('span', 'nm', s.name));
-    cell.title = skip ? `${s.name}（${altSvc.label}不停）` : (note ? `${s.name}（${note}）` : s.name);
+    cell.title = note ? `${s.name}（${note}）` : s.name;
     // 同站两辆车会叠在一起（没做纵向分道）—— 实际很少见，先不管
     for (const b of (byOrder.get(s.order) || [])) {
       const chip = el('span', 'bus' + (busSel && busSel.fleetNo === b.fleetNo ? ' on' : ''));
@@ -612,19 +609,10 @@ async function refresh() {
     shifts = { day: got.slice(0, g.dirs.length), alt: got.slice(g.dirs.length) };
     if (!shifts[shift].length) shift = 'day';   // 这条线没有这个变体就回日班/普通
 
-    // 夜班站表直接从刚取到的夜班数据里来
-    // 变体不服务的站：拿它自己的站表，按核心名跟日班站对 ——「金城商厦（市中医院）」要对上定制的「金城商厦」
-    altSvc = g.alt && g.alt.dirs.length ? {
-      label: g.alt.label,
-      stops: new Set(shifts.alt.flatMap((it) => it.stops.map((s) => coreName(s.name)))),
-      from: Math.min(...g.alt.dirs.map((d) => hm(d.firstTime))),
-      to: Math.max(...g.alt.dirs.map((d) => hm(d.lastTime))),
-    } : null;
-
     // 日班这一向收班了 → 默认显示夜班/定制（那条还在跑或刚跑完）。用户手动切过就不插手。
     // 判据用「当前看向」的首末班，不用整条线的并集：G02 两向末班差 70 分钟（19:50 / 18:40）
     const dayIt = shifts.day.find((x) => x.dir.lineId === focusId) || shifts.day[0];
-    if (!shiftTouched && altSvc && dayIt && nowMin() > hm(dayIt.dir.lastTime)) setShift('alt');
+    if (!shiftTouched && g.alt && g.alt.dirs.length && dayIt && nowMin() > hm(dayIt.dir.lastTime)) setShift('alt');
 
     detail = shifts[shift];
     stopCache.clear();                // 数据变了，到站缓存作废
