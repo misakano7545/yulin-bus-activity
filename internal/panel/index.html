@@ -138,6 +138,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .top .side:hover{background:var(--md-sys-state-hover)}
 .top .side:active{background:var(--md-sys-state-press)}
 .top .side svg{width:24px;height:24px;fill:currentColor}
+/* 左栏品牌副标题与页脚（数据更新时间）只在桌面端出现，窄屏顶栏/底栏没位置 */
+#vList .top .sub,#vList .sig{display:none}
 
 /* ── 搜索：MD3 search bar（56dp、全圆角、surface-container-high）────── */
 .searchbox{position:relative;flex:none;margin:8px 16px 4px}
@@ -318,6 +320,71 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .bottom .fav.on{color:var(--md-sys-color-on-secondary-container)}
 .bottom .fav.on::before{background:var(--md-sys-color-secondary-container)}
 .bottom button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent)}
+
+/* ── 桌面端（≥900px，MD3 Expanded）：左栏线路常驻 + 右栏详情 ──────────
+   窄屏是「列表 ↔ 详情」两页互斥；这里 .app 换成两列栅格，左栏当导航、
+   #vDetail 常驻，两个 hidden 都放开。改动全收在这块里，窄屏一行不动。 */
+@media (min-width:900px){
+  :root{--cw:56px}   /* 走向条格宽，车辆的段内插值按它换算，跟着一起变 */
+  .app{max-width:none;height:100dvh;overflow:hidden;
+    display:grid;grid-template-columns:284px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  #vList[hidden],#vDetail[hidden]{display:flex !important}
+  #vList{min-height:0;border-right:1px solid var(--md-sys-color-outline-variant)}
+  #vDetail{min-height:0;min-width:0}
+
+  /* 左栏：品牌区两行、搜索框压矮、列表行改成圆角（MD3 navigation drawer） */
+  #vList .top{min-height:auto;flex-direction:column;align-items:flex-start;padding:18px 20px 10px}
+  #vList .top h1{padding:0;font:650 16px/24px var(--sans);letter-spacing:-.01em}
+  #vList .top .sub{display:block;margin-top:3px;font:400 12px/16px var(--sans);
+    color:var(--md-sys-color-on-surface-variant)}
+  .searchbox{margin:2px 12px 6px}
+  .searchbox input{height:44px;padding-left:44px;font-size:14px}
+  .searchbox svg{left:14px;width:20px;height:20px}
+  .listwrap{padding:4px 8px 12px}
+  .lines li{min-height:48px;gap:12px;padding:6px 10px;border-bottom:0;
+    border-radius:var(--md-sys-shape-sm)}
+  .lines li.on{background:var(--md-sys-color-secondary-container)}
+  .lines li.on .to{color:var(--md-sys-color-on-secondary-container)}
+  .lines .badge{min-width:44px;height:28px;padding:0 10px;font-size:13px;line-height:28px}
+  .lines .to{font-size:13px}
+  .lines li.note{padding:24px 10px}
+  /* 左栏脚：数据更新时间 + 状态点（对应 ylzy 面板的 .sig） */
+  #vList .sig{display:flex;flex:none;align-items:center;gap:8px;padding:12px 20px;
+    border-top:1px solid var(--md-sys-color-outline-variant);
+    font:400 12px/16px var(--sans);color:var(--md-sys-color-on-surface-variant)}
+  .sig .pulse{flex:none;width:7px;height:7px;border-radius:var(--md-sys-shape-full);
+    background:var(--md-sys-color-primary)}
+  .sig span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* 右栏顶栏：线路名 + 三个动作（窄屏的底栏挪上来），返回键不需要了 */
+  #vDetail .top{padding:0 24px;border-bottom:1px solid var(--md-sys-color-outline-variant)}
+  #btnBack{display:none}
+  #vDetail .top h1{font-size:18px}
+  .top .acts{flex:none;display:flex;gap:8px}
+  .top .acts button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;
+    border:1px solid var(--md-sys-color-outline);border-radius:var(--md-sys-shape-full);
+    color:var(--md-sys-color-primary);font:500 14px/20px var(--sans);letter-spacing:.1px}
+  .top .acts button:hover{background:color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)}
+  .top .acts svg{width:18px;height:18px;fill:currentColor}
+  .top .acts button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+    border-color:color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent)}
+  .top .acts .fav.on{background:var(--md-sys-color-secondary-container);
+    color:var(--md-sys-color-on-secondary-container);border-color:transparent}
+
+  /* 内容：头部、走向条一块卡、站点卡改成左对齐、动作按钮不撑满整行 */
+  .body{padding:0 24px 40px}
+  .lhead{padding:20px 0 0}
+  .dirs2{font-size:26px;line-height:32px}
+  .railwrap{margin-top:20px;padding:20px 20px 16px;
+    background:var(--md-sys-color-surface-container-low);border-radius:var(--md-sys-shape-lg)}
+  .stn .nm{font-size:13px;width:2.3em}   /* 一站两个字一行，走向条不至于被最长站名撑得老高 */
+  /* 卡片别跟着窗口无限拉宽：一行里站名和它右边的状态离太远就读不成一行了 */
+  .scard{margin:20px 0 0;text-align:left;max-width:860px}
+  .scard .sn{justify-content:flex-start}
+  .cardbtns{margin:12px 0 0}
+  .cardbtns button{flex:0 0 auto;padding:0 20px}
+  .upd{padding:16px 0}
+}
 </style>
 </head>
 <body>
@@ -325,12 +392,14 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
   <!-- 线路列表 -->
   <section class="view" id="vList">
-    <div class="top"><span class="side"></span><h1>玉林实时公交</h1><span class="side"></span></div>
+    <div class="top"><span class="side"></span><h1>玉林实时公交</h1><span class="side"></span>
+      <div class="sub">实时到站 · 数据来自车来了</div></div>
     <div class="searchbox">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
       <input id="q" type="search" placeholder="搜索线路、起终点…" autocomplete="off" aria-label="搜索线路">
     </div>
     <div class="listwrap"><ul class="lines" id="lines"><li class="note">加载中…</li></ul></div>
+    <div class="sig"><span class="pulse"></span><span id="navUpd">加载中…</span></div>
   </section>
 
   <!-- 线路详情 -->
@@ -340,6 +409,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
       </button>
       <h1 id="dTitle">—</h1>
+      <div class="acts" id="topActs"></div>
       <span class="side"></span>
     </div>
 
@@ -370,7 +440,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
       <div class="upd" id="upd">—</div>
     </div>
 
-    <div class="bottom">
+    <div class="bottom" id="bottomBar">
       <button class="fav" id="btnFav" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>
         <span id="favTxt">收藏路线</span>

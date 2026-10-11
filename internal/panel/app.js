@@ -27,6 +27,8 @@ let shift = 'day';    // 'day' | 'alt'：日班/普通 vs 夜班/定制
 let shiftTouched = false;  // 用户手动切过变体 —— 之后日班收班也不自动切了
 let shifts = { day: [], alt: [] };
 let timer = null;
+// 桌面端断点，跟 index.html 里那块 @media (min-width:900px) 是同一个数
+const wide = matchMedia('(min-width:900px)');
 let stopCache = new Map();       // `${lineId}:${order}` → 该站的到站快照
 let railScrollPending = false;   // 换线路/换变体/换方向时把选中站滚进视野；10 秒刷新不滚
 
@@ -219,6 +221,9 @@ function onHash() {
     $('#vList').hidden = true;
     $('#vDetail').hidden = false;
     select(n);
+  } else if (wide.matches && routes.length) {
+    // 桌面端左栏常驻，右栏不能空着：没有选中就默认打开第一条
+    openLine(routes[0].name);
   } else {
     current = null;
     $('#vList').hidden = false;
@@ -624,7 +629,9 @@ async function refresh() {
     stopCache.clear();                // 数据变了，到站缓存作废
 
     $('#upd').className = 'upd';
-    $('#upd').textContent = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · 车来了`;
+    const stamp = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · 车来了`;
+    $('#upd').textContent = stamp;
+    $('#navUpd').textContent = stamp;   // 左栏脚同款（那行只在桌面端显示）
     renderLines($('#q').value);
     renderAll();
     if (!sel) return;
@@ -659,7 +666,17 @@ async function select(name) {
   await refresh();
 }
 
+// 桌面端左栏常驻，窄屏那条底栏在宽屏没地方待 —— 三个动作挪进顶栏右侧；变窄再挪回去。
+// 按钮是同一批元素（监听器在 boot 里绑的），挪位置不重绑。
+function layoutActs() {
+  const to = wide.matches ? $('#topActs') : $('#bottomBar');
+  for (const id of ['#btnFav', '#btnRefresh', '#btnTurn']) to.append($(id));
+  $('#bottomBar').hidden = wide.matches;   // 搬空之后底栏要收掉（还有缩进的空文本节点，:empty 判不出来）
+}
+
 async function boot() {
+  layoutActs();
+  wide.addEventListener('change', layoutActs);
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
   $('#btnBack').addEventListener('click', () => history.back());
   $('#btnRefresh').addEventListener('click', () => { stopCache.clear(); refresh(); });
