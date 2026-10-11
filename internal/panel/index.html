@@ -391,13 +391,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   .rail::before{left:21px;right:auto;top:calc(var(--ch) / 2);bottom:calc(var(--ch) / 2);
     width:8px;height:auto}
   .stn{flex:0 0 var(--ch);width:auto;height:var(--ch);flex-direction:row;align-items:center;
-    gap:12px;padding:0 8px;border-radius:var(--md-sys-shape-sm)}
+    gap:12px;padding:0 76px 0 8px;border-radius:var(--md-sys-shape-sm)}   /* 右侧留出车 chip 那条道 */
   .stn:hover{background:var(--md-sys-state-hover)}
   .stn .bx{flex:none;width:20px;height:20px;margin-left:7px}   /* 中心落在 x=25，与竖轴对齐 */
   .stn .nm{min-width:0;margin:0;width:auto;font-size:14px;line-height:20px;text-align:left;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  /* 车 chip 竖排里跟在站名后面（--p 段内插值只在横排走向条上有意义），推到行尾 */
-  .stn .bus{position:static;transform:none;order:1;margin-left:auto;flex:none}
+  /* 车 chip：横排那套「段内插值」搬到竖轴 —— p=1 压在它正在接近的那站上，p→0 退到上一站之间 */
+  .stn .bus{top:calc(var(--ch) / 2 + (var(--p) - 1) * var(--ch));left:auto;right:12px;
+    transform:translateY(-50%)}
+  /* 首站上面没有上一格，退到站间就被灰卡裁掉 —— 钉在首站上 */
+  .stn:first-child .bus{top:calc(var(--ch) / 2)}
   /* 桌面端两个按钮都不放：右栏这么宽，一辆车的列表撑不起来（没车时更只剩一行字）。
      「反方向站点」= 顶栏「换向」、「车辆列表」= 走向条上的车徽标，桌面端都已有地方点。 */
   .cardbtns{display:none}
