@@ -270,7 +270,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 /* ── 走向条（MD3 没有这个组件，自绘；轴线用品牌色角色 route）──────── */
 .railwrap{margin-top:20px;overflow-x:auto;padding:0 16px 4px;scrollbar-width:thin}
-.rail{position:relative;display:flex;align-items:flex-start;min-width:max-content;padding-top:26px}
+/* width:max-content（不是 min-width）—— display:flex 是块级盒，只给 min-width 它照样铺满
+   .railwrap，::before 的轴线就跟着伸到末站之外老远，站少的线路右半边空一截。 */
+.rail{position:relative;display:flex;align-items:flex-start;width:max-content;padding-top:26px}
 .rail::before{content:'';position:absolute;left:0;right:0;top:35px;height:8px;
   border-radius:var(--md-sys-shape-full);background:var(--md-sys-color-route)}
 .stn{position:relative;flex:0 0 var(--cw);width:var(--cw);display:flex;flex-direction:column;
@@ -375,8 +377,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   .body{padding:0 24px 40px}
   .lhead{padding:20px 0 0}
   .dirs2{font-size:26px;line-height:32px}
-  .railwrap{margin-top:20px;padding:20px 20px 16px;
+  /* 走向条那块卡跟着站数收窄（width:max-content），不铺满整栏 —— 站少的线路右边一大片灰底。
+     收窄后自己居中；站多到溢出时 max-width:100% 兜住，卡里横滚。 */
+  .railwrap{margin:20px auto 0;width:max-content;max-width:100%;padding:20px 20px 16px;
     background:var(--md-sys-color-surface-container-low);border-radius:var(--md-sys-shape-lg)}
+  /* 站少的线路撑不满，整条居中；站多到溢出时 auto 外边距落成 0，还是从左边开始横滚 */
+  .rail{margin:0 auto}
   .stn .nm{font-size:13px;width:2.3em}   /* 一站两个字一行，走向条不至于被最长站名撑得老高 */
   /* 卡片别跟着窗口无限拉宽：一行里站名和它右边的状态离太远就读不成一行了 */
   .scard{margin:20px 0 0;text-align:left;max-width:860px}

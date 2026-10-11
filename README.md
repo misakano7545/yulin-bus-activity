@@ -39,6 +39,10 @@ go build -o yba ./cmd/server
 - 底栏那三个动作 JS 里挪进顶栏右侧（`layoutActs()`，跟着 `matchMedia` 变），窄屏再挪回去。
   按钮是同一批元素，监听器不用重绑。
 - 没选线路时桌面端默认打开第一条（`onHash` 里那一支）—— 左栏常驻，右栏不能空着。
+- 走向条那块灰卡跟着站数收窄并居中（`.railwrap` 用 `width:max-content` + `max-width:100%`，
+  `.rail` 用 `width:max-content`）。**必须写 `width` 不能只写 `min-width`**：`display:flex` 是
+  块级盒，只给下限它照样铺满整栏，`::before` 的轴线就跟着伸到末站之外，站少的线路右半边
+  空一大片。站多到溢出时 `max-width` 兜住，卡里照旧横滚。
 
 改动全在 `index.html` 的 `@media (min-width:900px)` 块和 `app.js` 的 `wide` / `layoutActs`
 两处，窄屏一行没动。
