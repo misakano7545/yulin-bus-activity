@@ -110,18 +110,24 @@ const STOP_NOTES = { '玉林市第三人民医院（玉林市第十中学）': '
 const TERMINUS_ALIAS = { '玉林市第三人民医院（玉林市第十中学）': '火车站' };
 const endName = (s) => TERMINUS_ALIAS[s] || s;
 
-// 方向级的运行提醒：只在该线该方向显示。上游站表里看不出「哪几班只跑一半」，
-// 只能照运营方公告钉在这里。按「线路名 + 起终点」匹配，不按 lineId —— 上游的 id
-// 随时可能换，名字才是我们一直在用的键。
+// 线路/方向级的运行提醒，显示在详情页头部。上游站表里看不出这类运营规则，只能照运营方
+// 公告或实测钉在这里。按「线路名 [+ 起终点]」匹配，不按 lineId —— 上游的 id 随时可能换，
+// 名字才是我们一直在用的键。from/to 不写就是两个方向都提醒。
 const DIR_NOTES = [
   {
     line: '23', from: '瓜地坡', to: '工业品电器城',
     text: '18:50、19:15 从瓜地坡开出的车次只到城西开发区',
     src: '玉林公交微信公众号',
   },
+  {
+    line: '9',
+    text: '因玉林市第三人民医院（玉林市第十中学）为学生离校返校时的临时站，' +
+          '故页面显示的首末站为：毅德国际商贸城和火车站',
+  },
 ];
 function dirNote(d) {
-  return DIR_NOTES.find((n) => n.line === d.name && n.from === d.start && n.to === d.end) || null;
+  return DIR_NOTES.find((n) => n.line === d.name &&
+    (!n.from || n.from === d.start) && (!n.to || n.to === d.end)) || null;
 }
 
 function groupByName(ls) {
@@ -308,7 +314,7 @@ function renderHead(it) {
   $('#dFrom').textContent = endName(it.dir.start);
   $('#dTo').textContent = endName(it.dir.end);
   const n = dirNote(it.dir);
-  $('#dNote').textContent = n ? `${n.text}（来自${n.src}）` : '';
+  $('#dNote').textContent = n ? n.text + (n.src ? `（来自${n.src}）` : '') : '';
 }
 
 // 标签行：首末班 / 票价 / 总站数 / 变体切换 / 运营状态。
