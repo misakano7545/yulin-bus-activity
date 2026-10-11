@@ -413,7 +413,7 @@ function renderFollow(box, it, fleetNo) {
   if (!b) { box.append(el('div', 'sub', '这辆车已不在线上（收班或已到终点）。')); return; }
 
   const left = Math.max(0, it.stops.length - b.order);
-  const sub = [b.state === 1 ? '已到站' : (b.speed > 0 ? `${b.speed.toFixed(1)} km/h` : '在途'),
+  const sub = [b.state === 1 ? '已到站' : '在途',
                left > 0 ? `距终点 ${left} 站` : '已到终点'];
   if (b.eta > 0) {
     sub.push(mins(b.eta));                       // 默认请求下 ETA 是到终点的
@@ -465,7 +465,7 @@ function renderBusList(box, it) {
       : b.state === 1 ? '已到站' : '即将到站';
     const atStop = b.state === 1;   // 已到站由右边的倒计时列说，这里就不再重复
     const sub = [over ? '已过该站' : atStop ? null : (left > 0 ? `还有 ${left} 站` : '正在进站'),
-                 atStop ? null : (b.speed > 0 ? `${b.speed.toFixed(1)} km/h` : '在途')].filter(Boolean);
+                 atStop ? null : '在途'].filter(Boolean);
     if (b.arriveAt) sub.push(`${b.arriveAt} 到`);
     if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
     const txt = el('div', 'vtxt');
