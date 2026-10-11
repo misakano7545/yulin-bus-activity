@@ -398,11 +398,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* 车 chip 竖排里跟在站名后面（--p 段内插值只在横排走向条上有意义），推到行尾 */
   .stn .bus{position:static;transform:none;order:1;margin-left:auto;flex:none}
-  /* 工具条只留「车辆列表」——「反方向站点」跟顶栏「换向」是同一个 handler，窄屏两个都还在 */
-  .cardbtns{grid-area:2/2/3/3;margin:20px 0 0}
-  .cardbtns #btnDir{display:none}
-  .cardbtns button{flex:0 0 auto;padding:0 20px}
-  .scard{grid-area:3/2/4/3;margin:20px 0 0;text-align:left;max-width:none;align-self:start}
+  /* 桌面端两个按钮都不放：右栏这么宽，一辆车的列表撑不起来（没车时更只剩一行字）。
+     「反方向站点」= 顶栏「换向」、「车辆列表」= 走向条上的车徽标，桌面端都已有地方点。 */
+  .cardbtns{display:none}
+  .scard{grid-area:2/2/4/3;margin:20px 0 0;text-align:left;max-width:none;align-self:start}
   .scard .sn{justify-content:flex-start}
   .upd{grid-area:4/1/5/3;padding:16px 0 0}
 }

@@ -677,6 +677,8 @@ function layoutActs() {
   const to = wide.matches ? $('#topActs') : $('#bottomBar');
   for (const id of ['#btnFav', '#btnRefresh', '#btnTurn']) to.append($(id));
   $('#bottomBar').hidden = wide.matches;   // 搬空之后底栏要收掉（还有缩进的空文本节点，:empty 判不出来）
+  // 桌面端没有车辆列表（.cardbtns 收掉了），窄屏开着列表时拉宽要把这状态清掉
+  if (wide.matches && busListOpen) { busListOpen = false; renderStation(); }
 }
 
 async function boot() {
