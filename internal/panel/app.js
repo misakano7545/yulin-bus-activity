@@ -634,7 +634,9 @@ async function refresh() {
     $('#navUpd').textContent = stamp;   // 左栏脚同款（那行只在桌面端显示）
     renderLines($('#q').value);
     renderAll();
-    if (!sel) return;
+    // sel 空着但有选中车辆 = 车辆跟踪页，renderAll 里的 ensureSel 刚把 sel 补上 —— 这一趟
+    // 再去取「到该站」的 ETA 会走 selectStop，而它开头就把 busSel 清了：跟踪页撑不过一轮刷新。
+    if (!sel || busSel) return;
     const it = detail.find((x) => x.dir.lineId === sel.lineId);
     const s = it && it.stops.find((x) => x.order === sel.order);
     if (s) await selectStop(it, s);   // 缓存已清，这里会重取一次该站的 ETA
