@@ -405,6 +405,8 @@ function renderStation() {
   const b = rt && (rt.buses || []).filter((x) => x.order <= s.order && x.eta > 0)
     .sort((x, y) => etaKey(x) - etaKey(y))[0];
   if (b) box.append(el('div', 'sub', `${b.fleetNo} 号车 · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
+  // 桌面端右栏够宽：点站就把全部车辆直接接在卡片下面，不用再点一次「车辆列表」
+  if (wide.matches) { box.classList.add('follow'); renderBusList(box, it, true); }
 }
 
 // 车辆跟踪页：点走向条上的车进这里（替掉站点卡）。
@@ -448,19 +450,24 @@ function renderFollow(box, it, fleetNo) {
 // 车辆列表：以当前选中的站为准，一辆一行列出它到这个站的倒计时。
 // 倒计时只能来自带 targetOrder 的那次请求（不带时 eta 的语义是「到终点」）——
 // 正是点站时 selectStop 取回来的那份，缓存在 stopCache 里，这里不再打请求。
-function renderBusList(box, it) {
-  const back = el('button', 'back2');
-  back.type = 'button';
-  back.append(icon('M15 4 7 12l8 8'), el('span', null, '返回站点'));
-  back.addEventListener('click', () => { busListOpen = false; renderStation(); });
-  box.append(back);
+// embedded = 桌面端挂在站点卡下面（那里没有「返回站点」可回，标题也不用重复站名）。
+function renderBusList(box, it, embedded) {
+  if (!embedded) {
+    const back = el('button', 'back2');
+    back.type = 'button';
+    back.append(icon('M15 4 7 12l8 8'), el('span', null, '返回站点'));
+    back.addEventListener('click', () => { busListOpen = false; renderStation(); });
+    box.append(back);
+  }
 
   const s = it.stops.find((x) => x.order === sel.order);
   if (!s) return;
   const rt = stopCache.get(`${it.dir.lineId}:${s.order}`);
   const h = el('div', 'h');
-  h.append(el('b', null, `到「${s.name}」`), el('span', null, `共 ${(rt && rt.buses || []).length} 辆`));
-  box.append(h, el('div', 'sub', `开往 ${it.dir.end}`));
+  h.append(el('b', null, embedded ? '全部车辆' : `到「${s.name}」`),
+           el('span', null, `共 ${(rt && rt.buses || []).length} 辆`));
+  box.append(h);
+  if (!embedded) box.append(el('div', 'sub', `开往 ${it.dir.end}`));
   if (!rt) { box.append(el('div', 'sub', '读取到站时间…')); return; }
   const bs = (rt.buses || []).slice();
   if (!bs.length) { box.append(el('div', 'sub', `当前${stateOf(rt)[1]}。`)); return; }

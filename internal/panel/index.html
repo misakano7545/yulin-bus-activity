@@ -401,11 +401,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
     transform:translateY(-50%)}
   /* 首站上面没有上一格，退到站间就被灰卡裁掉 —— 钉在首站上 */
   .stn:first-child .bus{top:calc(var(--ch) / 2)}
-  /* 桌面端两个按钮都不放：右栏这么宽，一辆车的列表撑不起来（没车时更只剩一行字）。
-     「反方向站点」= 顶栏「换向」、「车辆列表」= 走向条上的车徽标，桌面端都已有地方点。 */
+  /* 桌面端不摆这两个按钮：车辆列表点站就直接出（见 renderStation），
+     「反方向站点」= 顶栏「换向」。窄屏两个都还在。 */
   .cardbtns{display:none}
   .scard{grid-area:2/2/4/3;margin:20px 0 0;text-align:left;max-width:none;align-self:start}
   .scard .sn{justify-content:flex-start}
+  .scard .h{margin-top:16px}   /* 卡片下面接着「全部车辆」那行 */
   .upd{grid-area:4/1/5/3;padding:16px 0 0}
 }
 </style>
