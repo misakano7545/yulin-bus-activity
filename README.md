@@ -27,25 +27,30 @@ go build -o yba ./cmd/server
 `-addr` 默认 `:8080`。`plate_map.json` 是车牌号（`licence`）到公交公司自编号的映射，
 缺了不致命：非纯数字的车牌原样透出并记日志，跑一轮就能收齐待补项。
 
-## 版面：窄屏单列，桌面端两栏
+## 版面：窄屏单列，桌面端三栏
 
-窄屏（<900px）还是原来那套：线路列表 ↔ 线路详情两页互斥，底栏放收藏/刷新/换向。
+窄屏（<900px）还是原来那套：线路列表 ↔ 线路详情两页互斥，底栏放收藏/刷新/换向，走向条横排
+（`.rail{width:max-content}` —— 只写 `min-width` 的话 `display:flex` 是块级盒，轴线会跟着铺满
+容器、伸到末站之外）。
 
-桌面端（≥900px）`.app` 换成两列栅格：左栏 284px 常驻线路列表（品牌区、搜索、列表、
-底部数据更新时间），右栏常驻线路详情。三处配套：
+桌面端（≥900px）分三栏：左栏 284px 线路导航，右栏内容区再分「站点轴 1fr（≤920px）| 详情
+440px」。配套几处：
 
 - `#vList` / `#vDetail` 的 `hidden` 在桌面端被 `display:flex !important` 放开 —— 窄屏那套
   两页互斥是靠 `hidden` 切的，桌面端两页同时在场上，所以要在样式里盖掉。
 - 底栏那三个动作 JS 里挪进顶栏右侧（`layoutActs()`，跟着 `matchMedia` 变），窄屏再挪回去。
   按钮是同一批元素，监听器不用重绑。
 - 没选线路时桌面端默认打开第一条（`onHash` 里那一支）—— 左栏常驻，右栏不能空着。
-- 走向条那块灰卡跟着站数收窄并居中（`.railwrap` 用 `width:max-content` + `max-width:100%`，
-  `.rail` 用 `width:max-content`）。**必须写 `width` 不能只写 `min-width`**：`display:flex` 是
-  块级盒，只给下限它照样铺满整栏，`::before` 的轴线就跟着伸到末站之外，站少的线路右半边
-  空一大片。站多到溢出时 `max-width` 兜住，卡里照旧横滚。
+- **走向条在桌面端转竖排**：一站一行（行高 `--ch`）、站名横排、绿线改竖轴（`.rail::before`
+  换成 `left` + `top/bottom` 收半行）。横排 30 站要横向滚 292px，站名竖着写最长 9 行 135px
+  —— 桌面端竖向空间多得多，换成竖列表后一屏十几站、鼠标滚轮直接滚。
+- 内容区 `.body` 自己变成栅格、`overflow:hidden`，高度铺满视口：站点轴在卡内竖滚，站点卡/
+  车辆列表/跟踪页都落在右栏（不再互相顶掉整页）。`.cardbtns #btnDir` 在桌面端藏掉 ——
+  「反方向站点」跟顶栏「换向」绑的是同一个 handler。
+- 车徽标竖排里跟在站名后面（横排那套 `--p` 段内插值只在横排走向条上有意义），推到行尾。
 
-改动全在 `index.html` 的 `@media (min-width:900px)` 块和 `app.js` 的 `wide` / `layoutActs`
-两处，窄屏一行没动。
+改动全在 `index.html` 的 `@media (min-width:900px)` 块和 `app.js` 的 `wide` / `layoutActs` /
+`renderRail` 里那一处 `scrollIntoView`，窄屏一行没动。
 
 ## 接口
 

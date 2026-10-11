@@ -532,9 +532,12 @@ function renderRail() {
     if (on) selCell = cell;
     rail.append(cell);
   }
-  // 只在换线路/换班次/换方向时滚一次 —— 每 10 秒刷新都滚会把用户拖的横向位置拽回去。
+  // 只在换线路/换班次/换方向时滚一次 —— 每 10 秒刷新都滚会把用户拖的位置拽回去。
   if (railScrollPending && selCell) {
-    selCell.scrollIntoView({ inline: 'center', block: 'nearest' });
+    // 窄屏走向条是横排，横向居中；桌面端它是竖列表，改成竖向居中
+    selCell.scrollIntoView(wide.matches
+      ? { block: 'center', inline: 'nearest' }
+      : { inline: 'center', block: 'nearest' });
     railScrollPending = false;
   }
 }

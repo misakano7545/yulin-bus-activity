@@ -327,7 +327,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
    窄屏是「列表 ↔ 详情」两页互斥；这里 .app 换成两列栅格，左栏当导航、
    #vDetail 常驻，两个 hidden 都放开。改动全收在这块里，窄屏一行不动。 */
 @media (min-width:900px){
-  :root{--cw:56px}   /* 走向条格宽，车辆的段内插值按它换算，跟着一起变 */
+  :root{--ch:44px}   /* 桌面端走向条的行高（竖排一站一行），竖轴上下的收口按它算 */
   .app{max-width:none;height:100dvh;overflow:hidden;
     display:grid;grid-template-columns:284px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
   #vList[hidden],#vDetail[hidden]{display:flex !important}
@@ -373,23 +373,38 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   .top .acts .fav.on{background:var(--md-sys-color-secondary-container);
     color:var(--md-sys-color-on-secondary-container);border-color:transparent}
 
-  /* 内容：头部、走向条一块卡、站点卡改成左对齐、动作按钮不撑满整行 */
-  .body{padding:0 24px 40px}
-  .lhead{padding:20px 0 0}
+  /* 内容区：窄屏是「卡片在上、走向条在下」一路往下排，桌面端这块要重新分 ——
+     走向条转竖排占左栏、自己滚，站点卡/车辆列表/跟踪页归右栏，高度铺满视口。 */
+  .body{padding:0 24px 24px;overflow:hidden;
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);
+    grid-template-rows:auto auto minmax(0,1fr) auto;column-gap:24px}
+  .lhead{grid-area:1/1/2/3;padding:20px 0 0}
   .dirs2{font-size:26px;line-height:32px}
-  /* 走向条那块卡跟着站数收窄（width:max-content），不铺满整栏 —— 站少的线路右边一大片灰底。
-     收窄后自己居中；站多到溢出时 max-width:100% 兜住，卡里横滚。 */
-  .railwrap{margin:20px auto 0;width:max-content;max-width:100%;padding:20px 20px 16px;
-    background:var(--md-sys-color-surface-container-low);border-radius:var(--md-sys-shape-lg)}
-  /* 站少的线路撑不满，整条居中；站多到溢出时 auto 外边距落成 0，还是从左边开始横滚 */
-  .rail{margin:0 auto}
-  .stn .nm{font-size:13px;width:2.3em}   /* 一站两个字一行，走向条不至于被最长站名撑得老高 */
-  /* 卡片别跟着窗口无限拉宽：一行里站名和它右边的状态离太远就读不成一行了 */
-  .scard{margin:20px 0 0;text-align:left;max-width:860px}
-  .scard .sn{justify-content:flex-start}
-  .cardbtns{margin:12px 0 0}
+  /* 走向条：竖排一站一行（横排 30 站要横滚 292px、站名竖着写 9 行——桌面端不划算）。
+     灰卡占满左栏高度，站多就卡内竖滚。 */
+  /* 上下只留 4px：站少的线也要能整条放下不滚；超宽屏别把这栏拉成一条长条 */
+  .railwrap{grid-area:2/1/4/2;margin:20px 0 0;min-height:0;overflow-y:auto;overflow-x:hidden;
+    padding:4px 16px;max-width:920px;background:var(--md-sys-color-surface-container-low);
+    border-radius:var(--md-sys-shape-lg)}
+  .rail{margin:0;padding:0;min-width:0;width:auto;flex-direction:column;align-items:stretch}
+  /* 竖轴：从首个站块中心画到末个站块中心（行高固定 --ch，所以上下各让半行） */
+  .rail::before{left:21px;right:auto;top:calc(var(--ch) / 2);bottom:calc(var(--ch) / 2);
+    width:8px;height:auto}
+  .stn{flex:0 0 var(--ch);width:auto;height:var(--ch);flex-direction:row;align-items:center;
+    gap:12px;padding:0 8px;border-radius:var(--md-sys-shape-sm)}
+  .stn:hover{background:var(--md-sys-state-hover)}
+  .stn .bx{flex:none;width:20px;height:20px;margin-left:7px}   /* 中心落在 x=25，与竖轴对齐 */
+  .stn .nm{min-width:0;margin:0;width:auto;font-size:14px;line-height:20px;text-align:left;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* 车 chip 竖排里跟在站名后面（--p 段内插值只在横排走向条上有意义），推到行尾 */
+  .stn .bus{position:static;transform:none;order:1;margin-left:auto;flex:none}
+  /* 工具条只留「车辆列表」——「反方向站点」跟顶栏「换向」是同一个 handler，窄屏两个都还在 */
+  .cardbtns{grid-area:2/2/3/3;margin:20px 0 0}
+  .cardbtns #btnDir{display:none}
   .cardbtns button{flex:0 0 auto;padding:0 20px}
-  .upd{padding:16px 0}
+  .scard{grid-area:3/2/4/3;margin:20px 0 0;text-align:left;max-width:none;align-self:start}
+  .scard .sn{justify-content:flex-start}
+  .upd{grid-area:4/1/5/3;padding:16px 0 0}
 }
 </style>
 </head>
