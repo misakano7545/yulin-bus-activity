@@ -111,6 +111,9 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 映射写在 `internal/panel/app.js` 的 `TERMINUS_ALIAS` 与 `STOP_NOTES`。哪天运营规则变了
 （比如这一站改成全天停靠），改这两个表，不要动站表。
 
+玉樟那条同理：`园区综治中心` 显示成 **`樟木、园区综治中心`** —— 那一段是进了樟木镇又往园区里
+开，只写「园区综治中心」看不出到哪。走向条末格仍是真站名。
+
 详情页头部还会把这件事原样说一遍（`DIR_NOTES` 里 9 路那条，两个方向都显示）：站表里
 明明有个第十中学、页面上写的却是火车站，不解释一句就成了数据对不上。
 
