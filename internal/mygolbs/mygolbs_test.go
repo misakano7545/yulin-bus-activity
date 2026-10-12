@@ -110,6 +110,9 @@ func TestRealtimeToTerminus(t *testing.T) {
 		if b.Order < 1 || b.Order > 24 {
 			t.Errorf("%s order = %d，越界", b.FleetNo, b.Order)
 		}
+		if b.UpdatedAt.Unix() != 1791765057 {
+			t.Errorf("%s updatedAt = %v，应取该车的 _recTime（抓包 2026-10-12 08:30:57 CST）", b.FleetNo, b.UpdatedAt)
+		}
 	}
 
 	// statusType "0" = 已到站（官方包注释「到站的直接赋值为最近站」）：钉在站上，且这一站

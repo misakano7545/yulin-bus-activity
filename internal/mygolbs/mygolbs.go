@@ -210,6 +210,7 @@ func (c *Client) Realtime(ctx context.Context, lineID string, target int) (*upst
 		bus := upstream.Bus{
 			FleetNo: b.BusNumber, RawID: b.BusNumber, Confidence: "high", LineID: lineID,
 			Lat: b.Lat, Lng: b.Lng, Order: b.Index + 1, Target: target, Pos: 1,
+			UpdatedAt: time.UnixMilli(b.RecTime),
 		}
 		// statusType "0" 是到站（官方包：到站的直接赋值为最近站），钉在站上；在途的按投影
 		// 插到「上一站 → 正在接近的那站」之间。
@@ -409,6 +410,7 @@ type wireBus struct {
 	BusNumber  string  `json:"busNumber"` // 车牌
 	Lat        float64 `json:"bus_lat"`
 	Lng        float64 `json:"bus_lng"`
+	RecTime    int64   `json:"_recTime"` // 毫秒
 }
 
 type wireETA struct {
