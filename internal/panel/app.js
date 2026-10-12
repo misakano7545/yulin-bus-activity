@@ -414,7 +414,10 @@ function renderStation() {
   const s = it.stops.find((x) => x.order === sel.order);
   if (!s) return;
   box.append(el('div', 'sn', s.name));
-  if (STOP_NOTES[s.name]) box.append(el('div', 'sub note', STOP_NOTES[s.name]));
+  // 站点标记优先用上游的（掌上公交 stationsStatus）；车来了没有这个字段，退回手记的
+  // STOP_NOTES。
+  const note = s.status || STOP_NOTES[s.name];
+  if (note) box.append(el('div', 'sub note', note));
 
   const up = upcoming(it, s);
   const hint = el('div', 'hint');
@@ -552,7 +555,7 @@ function renderRail() {
 
   let selCell = null;
   for (const s of it.stops) {
-    const note = STOP_NOTES[s.name];
+    const note = s.status || STOP_NOTES[s.name];
     const on = !!(sel && sel.lineId === it.dir.lineId && sel.order === s.order);
     const cell = el('div', 'stn' + (note ? ' cond' : '') + (on ? ' on' : ''));
     // 站点就是站点：方块里不放公交车图标，车才用那个图标（走向条上的色块、车辆列表）

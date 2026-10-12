@@ -138,6 +138,7 @@ func (c *Client) Route(ctx context.Context, lineID string) (*upstream.Route, err
 	for _, st := range w.Data {
 		rt.Stops = append(rt.Stops, upstream.Stop{
 			ID: strconv.Itoa(st.Order), Name: st.Name, Order: st.Order, Lat: st.Lat, Lng: st.Lon,
+			Status: statusLabel(st.StationsStatus),
 		})
 	}
 	return rt, nil
@@ -407,7 +408,20 @@ type wireStation struct {
 	Lon   float64 `json:"station_lon"`
 	Lat   float64 `json:"station_lat"`
 	Order int     `json:"stationOrder"`
+	// StationsStatus 站点标记：0 临时不停靠、2 只上不下、3 只下不上、4 临时停靠、
+	// 5 响应式停靠、6 响铃式停靠、7 招手即停、8 大站车停靠；1=正常，其余（实测有 9）
+	// 官方 H5 也不渲染，一律按空处理。
+	StationsStatus int `json:"stationsStatus"`
 }
+
+// 对照表照抄官方 H5（js/mybus.js 里 station.stationsStatus 那个 switch）：
+// 上游没给 code→文案的接口，只有前端里这一份，改了要跟着改。
+var stationStatus = map[int]string{
+	0: "临时不停靠", 2: "只上不下", 3: "只下不上", 4: "临时停靠",
+	5: "响应式停靠", 6: "响铃式停靠", 7: "招手即停", 8: "大站车停靠",
+}
+
+func statusLabel(code int) string { return stationStatus[code] }
 
 // 首末班按「北流汽车总站发车 6：30…」这种口径给，一条方向一条。
 type wireSpan struct {

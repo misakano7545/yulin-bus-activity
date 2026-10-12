@@ -88,6 +88,39 @@ func TestRoute(t *testing.T) {
 	if rt.Stops[23].Lat == 0 || rt.Stops[23].Lng == 0 {
 		t.Error("末站缺坐标 —— 车辆在两站之间插值要用")
 	}
+	for _, s := range rt.Stops {
+		if s.Status != "" {
+			t.Errorf("%s 的站点标记 = %q，抓包里这方向全是 stationsStatus=1", s.Name, s.Status)
+		}
+	}
+
+	// 抓包里唯一的非 1 值：dir2 第 23 站 stationsStatus=9。官方 H5 不认 9，所以露出来
+	// 应该是空 —— 若 JSON tag 写错，这站会变成 0 的文案「临时不停靠」。
+	d2, err := newTestClient(t).Route(context.Background(), "mg40105-2")
+	if err != nil {
+		t.Fatalf("Route dir2: %v", err)
+	}
+	if got := d2.Stops[22].Name; got != "新北宝路口" {
+		t.Fatalf("dir2 第 23 站 = %q", got)
+	}
+	if got := d2.Stops[22].Status; got != "" {
+		t.Errorf("新北宝路口 stationsStatus=9 应露空，得到 %q", got)
+	}
+}
+
+// 对照表照抄官方 H5 那个 switch；表里没有的（含实测 9）一律空 —— 别自己加语义。
+func TestStatusLabel(t *testing.T) {
+	for code, want := range map[int]string{
+		0: "临时不停靠", 1: "", 2: "只上不下", 3: "只下不上", 4: "临时停靠",
+		5: "响应式停靠", 6: "响铃式停靠", 7: "招手即停", 8: "大站车停靠", 9: "",
+	} {
+		if got := statusLabel(code); got != want {
+			t.Errorf("statusLabel(%d) = %q，想要 %q", code, got, want)
+		}
+	}
+	if got := statusLabel(-1); got != "" {
+		t.Errorf("statusLabel(-1) = %q，想要的空", got)
+	}
 }
 
 // target=0 时按终点站的站序问（掌上公交没有「到终点」这个入参）。

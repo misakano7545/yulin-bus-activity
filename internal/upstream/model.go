@@ -29,6 +29,9 @@ type Stop struct {
 	Order int     `json:"order"`
 	Lat   float64 `json:"lat"`
 	Lng   float64 `json:"lng"`
+	// Status 站点标记（「临时不停靠」「响应式停靠」这类，空=正常）。只有掌上公交
+	// 这个数据面有；车来了的站表里没有对应字段，恒为空。
+	Status string `json:"status"`
 }
 
 // Route 是一条线的静态信息：站点序列 + 走向折线。
