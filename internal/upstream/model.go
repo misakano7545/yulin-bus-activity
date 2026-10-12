@@ -18,6 +18,8 @@ type Line struct {
 	// Count 该方向当前在途车辆数，同样来自实时接口；首页把两个方向（含变体）相加。
 	// 最多旧 ttlLineState（5 分钟）——点进线路页看的是实时值。
 	Count int `json:"count"`
+	// Src 这条线的数据面（车来了 / 掌上公交）。面板底部那行「数据更新 … · X」照它写。
+	Src string `json:"src"`
 }
 
 // Stop 是线路上的一个站。

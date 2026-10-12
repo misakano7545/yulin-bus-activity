@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/misakano7545/yulin-bus-activity/internal/mygolbs"
 	"github.com/misakano7545/yulin-bus-activity/internal/plate"
 	"github.com/misakano7545/yulin-bus-activity/internal/server"
 	"github.com/misakano7545/yulin-bus-activity/internal/upstream"
@@ -27,6 +28,10 @@ func main() {
 	up := upstream.New(plates)
 	go up.StartLineStateLoop(context.Background()) // 线路列表的停运标记靠它
 
+	// 掌上公交那条数据面只补县市线路（北流105路），市区线路照旧走车来了。
+	mg := mygolbs.New()
+	log.Printf("掌上公交线路: %d 个方向", 2)
+
 	log.Printf("监听 %s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, server.NewHandler(server.Config{Upstream: up})))
+	log.Fatal(http.ListenAndServe(*addr, server.NewHandler(server.Config{Upstream: up, Mygolbs: mg})))
 }

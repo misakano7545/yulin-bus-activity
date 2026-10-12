@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/misakano7545/yulin-bus-activity/internal/mygolbs"
 	"github.com/misakano7545/yulin-bus-activity/internal/panel"
 	"github.com/misakano7545/yulin-bus-activity/internal/upstream"
 )
@@ -14,15 +15,18 @@ import (
 // Config 是 handler 的依赖。
 type Config struct {
 	Upstream *upstream.Client
+	// Mygolbs 是补车来了没覆盖的县市线路的那条数据面（北流105路）。为 nil 就只跑车来了。
+	Mygolbs *mygolbs.Client
 }
 
 type handler struct {
 	up *upstream.Client
+	mg *mygolbs.Client
 }
 
 // NewHandler 组装路由。
 func NewHandler(cfg Config) http.Handler {
-	h := &handler{up: cfg.Upstream}
+	h := &handler{up: cfg.Upstream, mg: cfg.Mygolbs}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.healthz)
 	panel.Routes(mux)
@@ -52,11 +56,30 @@ func (h *handler) lines(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// 掌上公交那几条（车辆数自带）。取失败只少了它们，不能让整个面板变成 502。
+	if h.mg != nil {
+		extra, err := h.mg.Lines(r.Context())
+		if err != nil {
+			log.Printf("掌上公交线路目录取失败: %v", err)
+		} else {
+			v = append(v, extra...)
+		}
+	}
 	writeJSON(w, v)
 }
 
 func (h *handler) route(w http.ResponseWriter, r *http.Request) {
-	v, err := h.up.Route(r.Context(), r.PathValue("lineId"))
+	id := r.PathValue("lineId")
+	if h.mg != nil && mygolbs.Handles(id) {
+		v, err := h.mg.Route(r.Context(), id)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, v)
+		return
+	}
+	v, err := h.up.Route(r.Context(), id)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -74,7 +97,17 @@ func (h *handler) realtime(w http.ResponseWriter, r *http.Request) {
 		}
 		target = n
 	}
-	v, err := h.up.Realtime(r.Context(), r.PathValue("lineId"), target)
+	id := r.PathValue("lineId")
+	if h.mg != nil && mygolbs.Handles(id) {
+		v, err := h.mg.Realtime(r.Context(), id, target)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		writeJSON(w, v)
+		return
+	}
+	v, err := h.up.Realtime(r.Context(), id, target)
 	if err != nil {
 		writeErr(w, err)
 		return

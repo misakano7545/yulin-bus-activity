@@ -35,6 +35,7 @@ const (
 	srcTag    = "wechat_yulingongjiao"
 	clientVer = "9.1.2"
 	userAgent = "Mozilla/5.0 (Linux; Android 13) Mobile MicroMessenger/8.0"
+	srcName   = "车来了" // 面板底部「数据更新 … · X」用的名字
 
 	ttlRealtime = 5 * time.Second
 	ttlStatic   = time.Hour
@@ -202,6 +203,7 @@ func (c *Client) Lines(ctx context.Context) ([]Line, error) {
 			LineID: l.LineID, Name: l.LineName,
 			Start: l.StartStop, End: l.EndStop,
 			FirstTime: l.FirstTime, LastTime: l.LastTime,
+			Src: srcName,
 		})
 	}
 	c.cache.put("lines", lines, ttlStatic)
