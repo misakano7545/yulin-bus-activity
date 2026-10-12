@@ -73,6 +73,9 @@ const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m %
 const mins = (sec) => (sec > 0 ? (sec <= 60 ? '即将到站' : `约 ${Math.round(sec / 60)} 分钟`) : '已过站');
 // 排序键：没有 ETA（已过站 / 上游没给预测）的车排最后
 const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
+// 车辆标识的写法：车牌（带省简称汉字，如 桂K02281D）说「X 车」，自编号（纯数字，如 430）说
+// 「X 号车」。两个数据面的 fleetNo 语义不同 —— 车来了给自编号、掌上公交直接给车牌。
+const busTag = (no) => (/[\u4e00-\u9fff]/.test(no) ? `${no} 车` : `${no} 号车`);
 
 // 站名的「核心名」：去掉括号注。上游同一处站台会存两条记录，站名一个带注一个不带、id 也不同
 // ——「金城商厦」440-47 与「金城商厦（市中医院）」440-75 就是同一个站台，所以按核心名判同站。
@@ -404,7 +407,7 @@ function renderStation() {
   const rt = stopCache.get(`${it.dir.lineId}:${s.order}`);
   const b = rt && (rt.buses || []).filter((x) => x.order <= s.order && x.eta > 0)
     .sort((x, y) => etaKey(x) - etaKey(y))[0];
-  if (b) box.append(el('div', 'sub', `${b.fleetNo} 号车 · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
+  if (b) box.append(el('div', 'sub', `${busTag(b.fleetNo)} · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
   // 桌面端右栏够宽：点站就把全部车辆直接接在卡片下面，不用再点一次「车辆列表」
   if (wide.matches) { box.classList.add('follow'); renderBusList(box, it, true); }
 }
@@ -421,7 +424,7 @@ function renderFollow(box, it, fleetNo) {
 
   const b = (it.rt.buses || []).find((x) => x.fleetNo === fleetNo);
   const h = el('div', 'h');
-  h.append(el('b', null, `${fleetNo} 号车`), el('span', null, `开往 ${it.dir.end}`));
+  h.append(el('b', null, busTag(fleetNo)), el('span', null, `开往 ${it.dir.end}`));
   box.append(h);
   if (!b) { box.append(el('div', 'sub', '这辆车已不在线上（收班或已到终点）。')); return; }
 
@@ -494,7 +497,7 @@ function renderBusList(box, it, embedded) {
     if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
     const txt = el('div', 'vtxt');
     const top = el('div', 'vh');
-    top.append(el('b', null, `${b.fleetNo} 号车`), el('span', 'eta', etaTxt));
+    top.append(el('b', null, busTag(b.fleetNo)), el('span', 'eta', etaTxt));
     txt.append(top, el('div', 'vs', sub.join(' · ')));
     const row = el('button', 'vrow' + (over ? ' pass' : ''));
     row.type = 'button';
