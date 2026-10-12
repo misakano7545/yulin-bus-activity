@@ -29,6 +29,16 @@ go build -o yba ./cmd/server
 `-addr` 默认 `:8080`。`plate_map.json` 是车牌号（`licence`）到公交公司自编号的映射，
 缺了不致命：非纯数字的车牌原样透出并记日志，跑一轮就能收齐待补项。
 
+线上那台走 systemd（`yulin-bus-activity.service`，跑的是仓库里预先编好的 `yba`，经 cloudflared
+挂在 `bus.haxwoi.eu.org`）。**改完代码要重新编译再重启，否则网页还是旧的一份**：
+
+```sh
+go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
+```
+
+面板资源（`index.html`/`app.js`）是 `go:embed` 打进二进制的，所以前端改动同样得走这一步 ——
+只改 `internal/panel/` 下的文件不会生效。
+
 ## 版面：窄屏单列，桌面端三栏
 
 窄屏（<900px）还是原来那套：线路列表 ↔ 线路详情两页互斥，底栏放收藏/刷新/换向，走向条横排
@@ -196,6 +206,7 @@ go build -o yba ./cmd/server
 | `buses[].pos` | 车坐标在两站之间投影 | 车与站同一坐标基准（104 的 `station_lat` 与 103 逐位相同），直接算比例 |
 | `buses[].eta` | `routeOnStationRTimeInfoList[].busToStationTime` × 60 | 上游给的是分钟；点站时按 `STATIONORDER` 问该站 |
 | `buses[].fleetNo`/`rawId` | `list[].busNumber` | **就是车牌**（车来了那边多是自编号），所以不过 `plate_map`、`confidence` 恒 `high` |
+| `buses[].updatedAt` | `list[]._recTime` | 毫秒，是上游自己的记录时间，不是本地 `now` |
 | `price` | `commonts` 里的「票价：X」 | 全线路只有这一处写着票价 |
 | `state` / `desc` | `runState` / `hasReal` | `runState=1` → 停运；`hasReal=0` → 未开通实时查询 |
 
