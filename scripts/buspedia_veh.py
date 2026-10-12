@@ -14,6 +14,7 @@ import argparse, collections, json, re, sys, time, urllib.parse, urllib.request,
 API = "https://api.buspedia.top/"
 SLUG = "cnvy82"                                    # 玉林市公共汽车公司
 MAP = "plate_map.json"
+MIN_NO = 365                                       # 365 以下没装调度一体机、不上报，表里不收
 VEH = re.compile(r'^\s*(\w+)\s*/\s*([\u4e00-\u9fff]\s*[A-Z]\s*[0-9A-Z]{4,6})\s*$')
 
 
@@ -48,6 +49,7 @@ def main():
     a = ap.parse_args()
 
     pairs = harvest()
+    pairs = {no: v for no, v in pairs.items() if no.isdigit() and int(no) >= MIN_NO}
     clash = {no: dict(v) for no, v in pairs.items() if len(v) > 1}
     if clash:
         sys.exit(f"一个自编号读到多块车牌，先人工看：{clash}")
