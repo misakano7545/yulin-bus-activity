@@ -43,7 +43,9 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 
 窄屏（<900px）还是原来那套：线路列表 ↔ 线路详情两页互斥，底栏放收藏/刷新/换向，走向条横排
 （`.rail{width:max-content}` —— 只写 `min-width` 的话 `display:flex` 是块级盒，轴线会跟着铺满
-容器、伸到末站之外）。
+容器、伸到末站之外。站少到撑不满时（广西先进专线 6 站）再 `min-width:100%` +
+`justify-content:space-between`，多出来的宽度摊进站距，右边不留空；站多到溢出时 free space 为负、
+退回左对齐照旧横滚，格宽始终 46px，所以桌面端（竖排）要显式把 `justify-content` 收回去）。
 
 桌面端（≥900px）分三栏：左栏 284px 线路导航，右栏内容区再分「站点轴 1fr（≤920px）| 详情
 440px」。配套几处：
