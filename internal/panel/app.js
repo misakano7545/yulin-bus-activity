@@ -1,7 +1,7 @@
 // app.js 面板前端逻辑（照「车来了」线路页的单列格式重做）。
 //
 // 只打本服务已有的三个接口，不新增后端：
-//   GET /lines                      线路目录（46 条 = 23 条线 × 2 方向）
+//   GET /lines                      线路目录（48 条 = 24 条线 × 2 方向，含掌上公交那 2 条）
 //   GET /lines/{id}                 站点序列
 //   GET /lines/{id}/realtime        实时车辆（?targetOrder=N 时 ETA 算到该站）
 //
@@ -474,13 +474,16 @@ function renderBusList(box, it, embedded) {
 
   // 没过该站的按到站先后排前面，已过的沉到最后
   const passed = (b) => b.order > s.order;
-  bs.sort((a, b) => (passed(a) - passed(b)) || (etaKey(a) - etaKey(b)));
+  // 已到站的车 eta 是 0 —— 那是「就在这站上」，不是「没有 ETA」。etaKey 把它算成
+  // Infinity，正好和最没谱的那辆一起沉到最底，可它明明最该排最前。
+  const soon = (b) => (b.state === 1 && b.eta <= 0 ? 0 : etaKey(b));
+  bs.sort((a, b) => (passed(a) - passed(b)) || (soon(a) - soon(b)));
 
   for (const b of bs) {
     const over = passed(b);
     const left = s.order - b.order;
     const etaTxt = over ? '已过站' : b.eta > 0 ? mins(b.eta)
-      : b.state === 1 ? '已到站' : '即将到站';
+      : b.state === 1 ? '已到站' : '无预测';   // 掌上公交每站只给最近 2 辆的预测，其余没 ETA
     const atStop = b.state === 1;   // 已到站由右边的倒计时列说，这里就不再重复
     const sub = [over ? '已过该站' : atStop ? null : (left > 0 ? `还有 ${left} 站` : '正在进站'),
                  atStop ? null : '在途'].filter(Boolean);
@@ -639,7 +642,9 @@ async function refresh() {
     stopCache.clear();                // 数据变了，到站缓存作废
 
     $('#upd').className = 'upd';
-    const stamp = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · 车来了`;
+    // 数据面按线路走（车来了 / 掌上公交），名字由后端在 line.src 里给
+    const src = (g.dirs[0] && g.dirs[0].src) || '车来了';
+    const stamp = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · ${src}`;
     $('#upd').textContent = stamp;
     $('#navUpd').textContent = stamp;   // 左栏脚同款（那行只在桌面端显示）
     renderLines($('#q').value);
