@@ -472,21 +472,24 @@ function renderBusList(box, it, embedded) {
   const bs = (rt.buses || []).slice();
   if (!bs.length) { box.append(el('div', 'sub', `当前${stateOf(rt)[1]}。`)); return; }
 
+  // 「已到站」是它停在自己那站（order），不是停在你正看的这站 —— 掌上公交每站只回最近
+  // 2 辆车的预测，窗口外又在别站停着的车没有 ETA，只看 state 会把它写成「已到站」。
+  const atStop = (b) => b.state === 1 && b.order === s.order;
   // 没过该站的按到站先后排前面，已过的沉到最后
   const passed = (b) => b.order > s.order;
   // 已到站的车 eta 是 0 —— 那是「就在这站上」，不是「没有 ETA」。etaKey 把它算成
   // Infinity，正好和最没谱的那辆一起沉到最底，可它明明最该排最前。
-  const soon = (b) => (b.state === 1 && b.eta <= 0 ? 0 : etaKey(b));
+  const soon = (b) => (atStop(b) && b.eta <= 0 ? 0 : etaKey(b));
   bs.sort((a, b) => (passed(a) - passed(b)) || (soon(a) - soon(b)));
 
   for (const b of bs) {
     const over = passed(b);
+    const at = atStop(b);   // 已到站由右边的倒计时列说，这里就不再重复
     const left = s.order - b.order;
     const etaTxt = over ? '已过站' : b.eta > 0 ? mins(b.eta)
-      : b.state === 1 ? '已到站' : '无预测';   // 掌上公交每站只给最近 2 辆的预测，其余没 ETA
-    const atStop = b.state === 1;   // 已到站由右边的倒计时列说，这里就不再重复
-    const sub = [over ? '已过该站' : atStop ? null : (left > 0 ? `还有 ${left} 站` : '正在进站'),
-                 atStop ? null : '在途'].filter(Boolean);
+      : at ? '已到站' : '无预测';   // 掌上公交每站只给最近 2 辆的预测，其余没 ETA
+    const sub = [over ? '已过该站' : at ? null : (left > 0 ? `还有 ${left} 站` : '正在进站'),
+                 at ? null : '在途'].filter(Boolean);
     if (b.arriveAt) sub.push(`${b.arriveAt} 到`);
     if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
     const txt = el('div', 'vtxt');

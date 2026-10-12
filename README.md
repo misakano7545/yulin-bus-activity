@@ -202,7 +202,7 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 |---|---|---|
 | `stops[].order` | `103` 的 `stationOrder` | 1 基，直接透出 |
 | `buses[].order` | `104` 的 `list[].index + 1` | 上游 `index` 是 0 基，官方 H5 包也是拿 `index+1` 当站序 |
-| `buses[].state` | `list[].statusType` | `"0"` = 已到站（官方包注释「到站的直接赋值为最近站」），其余 = 在途 |
+| `buses[].state` | `list[].statusType` | `"0"` = 已到站 —— **相对车自己那站**（官方包注释「到站的直接赋值为最近站」），其余 = 在途 |
 | `buses[].pos` | 车坐标在两站之间投影 | 车与站同一坐标基准（104 的 `station_lat` 与 103 逐位相同），直接算比例 |
 | `buses[].eta` | `routeOnStationRTimeInfoList[].busToStationTime` × 60 | 上游给的是分钟；点站时按 `STATIONORDER` 问该站 |
 | `buses[].fleetNo`/`rawId` | `list[].busNumber` | **就是车牌**（车来了那边多是自编号），所以不过 `plate_map`、`confidence` 恒 `high` |
@@ -219,6 +219,10 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 
 - **每站只给最近 2 辆车的预测**（上游 `routeOnStationRTimeInfoList` 最多两条），第 3 辆起没有 ETA。
   面板显示「无预测」，不猜「即将到站」—— 这也是 `app.js` 里那处文案改掉的原因。
+- **「已到站」（`state=1`）是相对车自己那站（`order`）说的，不是「到了你在看的那站」**：车辆
+  列表问的是「到你选的那站」，所以判到站要 `order` 等于所选站序。上面那条窗口限制会放大这个
+  区别 —— 窗口外那辆停在别站的车拿不到 ETA，只看 `state` 会让两个站的列表同时写「已到站」
+  （`app.js` `renderBusList` 里的 `atStop`）。
 - **班表（`207`/`116`）没接**：面板还没有班表位。
 - 站表缓存 1 小时、目录（含车辆数）1 分钟；实时不缓存 —— 面板 10 秒刷一次，点站还会单独问一次。
 - 抓包存在 `internal/mygolbs/testdata/`（2026-10-12 08:30 CST 的真实响应），单测按它断字段映射。
