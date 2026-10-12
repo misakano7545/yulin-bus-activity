@@ -232,7 +232,7 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 | `buses[].state` | `list[].statusType` | `"0"` = 已到站 —— **相对车自己那站**（官方包注释「到站的直接赋值为最近站」），其余 = 在途 |
 | `buses[].pos` | 车坐标在两站之间投影 | 车与站同一坐标基准（104 的 `station_lat` 与 103 逐位相同），直接算比例 |
 | `buses[].eta` | `routeOnStationRTimeInfoList[].busToStationTime` × 60 | 上游给的是分钟；点站时按 `STATIONORDER` 问该站 |
-| `buses[].fleetNo`/`rawId` | `list[].busNumber` | `busNumber` **就是车牌**，跟车来了那面一样过一遍 `plate_map.json` 归一成自编号；表里没有的（北流益业那几辆）原样透出，`confidence` 仍 `high` —— 车牌本身就是稳定标识，不算未知。面板按形态写：车牌光写车牌，自编号写「X 号车」。手机版列表里车牌只写**号码段去前导零**（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）—— 走向条一格 46px 放不下全车牌，全车牌留在 chip 的 `title` 与跟踪页标题里 |
+| `buses[].fleetNo`/`rawId` | `list[].busNumber` | `busNumber` **就是车牌**，跟车来了那面一样过一遍 `plate_map.json` 归一成自编号；表里没有的（北流益业那几辆）原样透出，`confidence` 仍 `high` —— 车牌本身就是稳定标识，不算未知。面板按形态写：车牌光写车牌，自编号写「X 号车」。手机版**站点列表**（走向条 chip、站点卡）里车牌只写**号码段去前导零**（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）—— 走向条一格 46px 放不下全车牌；车辆列表与跟踪页都是一整行，写全车牌，chip 的 `title` 里也留着全车牌 |
 | `buses[].updatedAt` | `list[]._recTime` | 毫秒，是上游自己的记录时间，不是本地 `now` |
 | `price` | `commonts` 里的「票价：X」 | 全线路只有这一处写着票价 |
 | `state` / `desc` | `runState` / `hasReal` | `runState=1` → 停运；`hasReal=0` → 未开通实时查询 |
