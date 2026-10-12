@@ -295,7 +295,7 @@ func TestRouteDataCached(t *testing.T) {
 }
 
 // 给了映射表就归一：FleetNo 取自编号，RawID 留上游的车牌 —— 出问题还能对回上游。
-// 表里没有的车牌（北流市公交那几辆）原样透出，见 TestRealtimeToTerminus 那几条断言。
+// 表里没有的车牌（北流105路那几辆）原样透出，见 TestRealtimeToTerminus 那几条断言。
 func TestRealtimeUsesPlateMap(t *testing.T) {
 	tab, err := plate.Load("testdata/plate_map.json")
 	if err != nil {

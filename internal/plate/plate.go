@@ -48,7 +48,7 @@ func (t *Table) FleetNo(licence string) (string, bool) {
 }
 
 // Lookup 只查表、不记日志，nil 表当空表。
-// 掌上公交那条面用这个：它拿到的车牌可能整支车队都不在这张表里（北流市公交的车），
+// 掌上公交那条面用这个：它拿到的车牌可能整支车队都不在这张表里（北流105路那几辆），
 // 而实时接口每 10 秒问一次 —— 走 FleetNo 会把这句「请补进 plate_map.json」刷满 journal。
 func (t *Table) Lookup(licence string) (string, bool) {
 	if t == nil {

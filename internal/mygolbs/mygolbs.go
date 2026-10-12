@@ -1,9 +1,9 @@
 // Package mygolbs 是掌上公交（mygolbs）H5 数据面的客户端。
 //
-// 只用来补车来了没覆盖的县市线路（目前只有北流105路），市区线路照旧走 internal/upstream。
+// 只用来补车来了没覆盖的县市线路（北流105路、陆川1路），市区线路照旧走 internal/upstream。
 // 两边的字段语义不一样，映射全写在本包里，别把掌上公交的字段名漏到面板里：
 //   - 车辆标识：busNumber 就是车牌（车来了那边 licence 多是自编号），所以拿 plate_map 归一成
-//     自编号；表里没有的（比如北流市公交的车）原样透出车牌
+//     自编号；表里没有的（比如北流105路那几辆，益业公交的车）原样透出车牌
 //   - 到站估计：只按站给（STATIONORDER），且每站最多回最近 2 辆车的预测 —— 其余车辆没有
 //     ETA，透出 0，前端显示「无预测」而不是猜「即将到站」
 //   - 运营状态：runState=1 该线路已停运、hasReal=0 未开通实时查询（见官方 H5 包
@@ -214,7 +214,7 @@ func (c *Client) Realtime(ctx context.Context, lineID string, target int) (*upst
 	}
 
 	for _, b := range up.List {
-		// 表里没有的车牌（北流市公交那几辆）原样透出 —— 车牌本身仍是稳定标识，不算低可信。
+		// 表里没有的车牌（北流105路那几辆）原样透出 —— 车牌本身仍是稳定标识，不算低可信。
 		fleetNo := b.BusNumber
 		if n, ok := c.plates.Lookup(b.BusNumber); ok {
 			fleetNo = n

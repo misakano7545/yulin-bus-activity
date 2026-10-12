@@ -202,7 +202,8 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 都是真的，所以补了第二个上游客户端 `internal/mygolbs`，目前服务这两条线（4 个方向）。
 
 **运营公司**（上游 `114` 的 `routeBean.company`）：陆川1路 = `玉林公交`，即**玉林市公共汽车
-公司**，跟市区那批车同属一家；北流105路 = `北流市公交`，是另一家。
+公司**，跟市区那批车同属一家；北流105路 平台字段写的是 `北流市公交`，那只是个简称，实际运营
+主体是**广西北流市益业公共汽车有限公司**，跟玉林那家不是一家。
 
 **分派靠 lineId 前缀**：`mg` 开头走掌上公交，其余走车来了（`internal/server` 里那两处
 `mygolbs.Handles(id)`）。`/lines` 把两边目录拼在一起；面板本身不区分数据面，只有底部那行
@@ -221,7 +222,7 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 | `buses[].state` | `list[].statusType` | `"0"` = 已到站 —— **相对车自己那站**（官方包注释「到站的直接赋值为最近站」），其余 = 在途 |
 | `buses[].pos` | 车坐标在两站之间投影 | 车与站同一坐标基准（104 的 `station_lat` 与 103 逐位相同），直接算比例 |
 | `buses[].eta` | `routeOnStationRTimeInfoList[].busToStationTime` × 60 | 上游给的是分钟；点站时按 `STATIONORDER` 问该站 |
-| `buses[].fleetNo`/`rawId` | `list[].busNumber` | `busNumber` **就是车牌**，跟车来了那面一样过一遍 `plate_map.json` 归一成自编号；表里没有的（北流市公交那几辆）原样透出，`confidence` 仍 `high` —— 车牌本身就是稳定标识，不算未知。面板按形态写：车牌光写车牌，自编号写「X 号车」。手机版列表里车牌只写**号码段去前导零**（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）—— 走向条一格 46px 放不下全车牌，全车牌留在 chip 的 `title` 与跟踪页标题里 |
+| `buses[].fleetNo`/`rawId` | `list[].busNumber` | `busNumber` **就是车牌**，跟车来了那面一样过一遍 `plate_map.json` 归一成自编号；表里没有的（北流益业那几辆）原样透出，`confidence` 仍 `high` —— 车牌本身就是稳定标识，不算未知。面板按形态写：车牌光写车牌，自编号写「X 号车」。手机版列表里车牌只写**号码段去前导零**（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）—— 走向条一格 46px 放不下全车牌，全车牌留在 chip 的 `title` 与跟踪页标题里 |
 | `buses[].updatedAt` | `list[]._recTime` | 毫秒，是上游自己的记录时间，不是本地 `now` |
 | `price` | `commonts` 里的「票价：X」 | 全线路只有这一处写着票价 |
 | `state` / `desc` | `runState` / `hasReal` | `runState=1` → 停运；`hasReal=0` → 未开通实时查询 |
