@@ -241,9 +241,6 @@ function renderLines(filter) {
     li.append(el('span', 'badge', r.name));
     li.append(el('span', 'to', `${endName(r.dirs[0].start)} → ${endName(r.dirs[0].end)}`));
     if (tag) li.append(el('span', 'tag', tag));
-    // 两个方向的车辆数合计（含夜班/定制变体）
-    const n = [...r.dirs, ...(r.alt ? r.alt.dirs : [])].reduce((s, d) => s + (d.count || 0), 0);
-    li.append(el('span', 'n' + (n ? '' : ' zero'), String(n)));
     if (favs.has(r.name)) li.append(el('span', 'star', '★'));
     li.tabIndex = 0;
     li.addEventListener('click', () => openLine(r.name));
