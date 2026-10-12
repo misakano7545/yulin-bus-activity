@@ -1,6 +1,7 @@
 // Package mygolbs 是掌上公交（mygolbs）H5 数据面的客户端。
 //
-// 只用来补车来了没覆盖的县市线路（北流105路、陆川1路），市区线路照旧走 internal/upstream。
+// 只用来补车来了没覆盖的线路（北流105路、陆川1路，以及市区那三条城际/樟木线），
+// 车来了有的照旧走 internal/upstream。
 // 两边的字段语义不一样，映射全写在本包里，别把掌上公交的字段名漏到面板里：
 //   - 车辆标识：busNumber 就是车牌（车来了那边 licence 多是自编号），所以拿 plate_map 归一成
 //     自编号；表里没有的（比如北流105路那几辆，益业公交的车）原样透出车牌
@@ -46,21 +47,40 @@ const (
 )
 
 // spec 是一条要发布的掌上公交线路方向。面板里的 lineId = "mg" + routeId + "-" + 方向
-// （车来了的 lineId 是纯数字串，两边不会撞）。加县市线路时在这里加两行，每个方向一行。
+// （车来了的 lineId 是纯数字串，两边不会撞）。加线路时在这里加两行，每个方向一行。
 type spec struct {
 	ID       string
 	CityCode string
 	CityName string
-	LineName string
+	LineName string // 上游查线路用的名字（LINENAME），不能动
 	Dir      int
+	// Short 是面板上显示的名字：上游那条「玉林至北流城际公交线路」在列表那一格放不下，
+	// 换简称；空表示直接用 LineName。
+	Short string
+}
+
+// label 面板显示名。
+func (s spec) label() string {
+	if s.Short != "" {
+		return s.Short
+	}
+	return s.LineName
 }
 
 var catalog = []spec{
-	{"mg40105-1", "450981", "北流市", "北流105路", 1},
-	{"mg40105-2", "450981", "北流市", "北流105路", 2},
+	{"mg40105-1", "450981", "北流市", "北流105路", 1, ""},
+	{"mg40105-2", "450981", "北流市", "北流105路", 2, ""},
 	// 陆川没有自己的城市码（450922 → -2），车队挂在玉林市 450900 下面，所以城市码写 450900
-	{"mg1011-1", "450900", "玉林市", "陆川1路", 1},
-	{"mg1011-2", "450900", "玉林市", "陆川1路", 2},
+	{"mg1011-1", "450900", "玉林市", "陆川1路", 1, ""},
+	{"mg1011-2", "450900", "玉林市", "陆川1路", 2, ""},
+	// 这三条车来了没有，上游名字太长，面板那一格用简称（用户定的）。
+	// 玉樟（routeId 151）在线但没有车传 GPS，列表里会一直显示 0 辆 —— 这不是解析问题。
+	{"mg131-1", "450900", "玉林市", "玉林至北流城际公交线路", 1, "玉北1"},
+	{"mg131-2", "450900", "玉林市", "玉林至北流城际公交线路", 2, "玉北1"},
+	{"mg141-1", "450900", "玉林市", "玉林旅游客运站至北流成南站公交线路", 1, "玉北2"},
+	{"mg141-2", "450900", "玉林市", "玉林旅游客运站至北流成南站公交线路", 2, "玉北2"},
+	{"mg151-1", "450900", "玉林市", "玉林总站-福绵新滔工业园", 1, "玉樟"},
+	{"mg151-2", "450900", "玉林市", "玉林总站-福绵新滔工业园", 2, "玉樟"},
 }
 
 func specOf(lineID string) (spec, bool) {
@@ -113,7 +133,7 @@ func (c *Client) Route(ctx context.Context, lineID string) (*upstream.Route, err
 	if err != nil {
 		return nil, err
 	}
-	rt := &upstream.Route{LineID: lineID, Name: s.LineName}
+	rt := &upstream.Route{LineID: lineID, Name: s.label()}
 	for _, st := range w.Data {
 		rt.Stops = append(rt.Stops, upstream.Stop{
 			ID: strconv.Itoa(st.Order), Name: st.Name, Order: st.Order, Lat: st.Lat, Lng: st.Lon,
@@ -160,7 +180,7 @@ func (c *Client) buildLines(ctx context.Context) ([]upstream.Line, error) {
 			return nil, err
 		}
 		out = append(out, upstream.Line{
-			LineID: s.ID, Name: s.LineName,
+			LineID: s.ID, Name: s.label(),
 			Start: w.Data[0].Name, End: w.Data[len(w.Data)-1].Name,
 			FirstTime: w.first(), LastTime: w.last(),
 			State: rt.State, Desc: rt.Desc, Count: len(rt.Buses), Src: srcName,

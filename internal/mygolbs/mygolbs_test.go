@@ -177,9 +177,9 @@ func TestLines(t *testing.T) {
 	if len(ls) != len(catalog) {
 		t.Fatalf("线路数 = %d，目录里是 %d 个方向", len(ls), len(catalog))
 	}
-	// 目录里每条都要在 /lines 里出现 ID 与线路名对得上的一行 —— 加县市线路时不用改这段
+	// 目录里每条都要在 /lines 里出现 ID 与线路名对得上的一行 —— 加线路时不用改这段
 	for i, s := range catalog {
-		if ls[i].LineID != s.ID || ls[i].Name != s.LineName || ls[i].Src != srcName {
+		if ls[i].LineID != s.ID || ls[i].Name != s.label() || ls[i].Src != srcName {
 			t.Errorf("第 %d 条 = %+v，目录里是 %+v", i, ls[i], s)
 		}
 	}
@@ -212,11 +212,34 @@ func TestHandles(t *testing.T) {
 	if !Handles("mg1011-2") {
 		t.Error("陆川1路的 lineId 应被认领")
 	}
+	if !Handles("mg151-2") {
+		t.Error("玉樟的 lineId 应被认领")
+	}
 	if Handles("775200849296") {
 		t.Error("车来了的 lineId（纯数字）不该被认领")
 	}
 	if _, err := New(nil).Route(context.Background(), "775200849296"); err == nil {
 		t.Error("不认识的 lineId 该报错")
+	}
+}
+
+// 面板那一格显示的是 label（有简称用简称），不是上游的正式名 —— 上游那几个名字塞不下。
+func TestSpecLabel(t *testing.T) {
+	got := map[string]string{}
+	for _, s := range catalog {
+		got[s.ID] = s.label()
+	}
+	for id, want := range map[string]string{
+		"mg131-1": "玉北1", "mg141-2": "玉北2", "mg151-1": "玉樟",
+		"mg40105-1": "北流105路", "mg1011-2": "陆川1路",
+	} {
+		if got[id] != want {
+			t.Errorf("%s 显示名 = %q，应为 %q", id, got[id], want)
+		}
+	}
+	// 同名两个方向合成一条线（面板按名字分组），所以一对方向必须同名。
+	if got["mg131-1"] != got["mg131-2"] || got["mg151-1"] != got["mg151-2"] {
+		t.Error("同一条线的两个方向显示名必须一致")
 	}
 }
 
