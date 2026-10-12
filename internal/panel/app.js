@@ -77,13 +77,13 @@ const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
 // 如 430）后面得跟「号车」，否则「430」看不出是辆车。两个数据面的 fleetNo 语义不同 ——
 // 车来了给自编号、掌上公交直接给车牌。
 const isPlate = (no) => /[\u4e00-\u9fff]/.test(no);
-// 手机上车牌太长：走向条一格 46px，车牌 chip 却 99px —— 两格宽，压到邻站。手机版的列表只写
-// 数字后四位（桂K03853D→3853、桂KR8585→8585），宽屏维持全车牌。
-const busShort = (no) => (wide.matches || !isPlate(no) ? no : no.replace(/\D/g, '').slice(-4));
+// 手机上车牌太长：走向条一格 46px，车牌 chip 却 99px —— 两格宽，压到邻站。手机版只写号码段
+// 并去掉前导零（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585），宽屏维持全车牌。
+const busShort = (no) => (wide.matches || !isPlate(no) ? no : no.replace(/\D/g, '').replace(/^0+/, ''));
 const busTag = (no) => (isPlate(no) ? busShort(no) : `${no} 号车`);   // 站点卡、车辆列表
 // 跟踪页标题：触屏没有悬停，title 里那个全车牌看不到，这里得写全
 const busFull = (no) => (isPlate(no) ? no : `${no} 号车`);
-// shortcut: 同线两辆车数字后四位可能撞（桂KR0385 与 桂K00385D 都是 0385）；chip 的 title 里留着全车牌
+// shortcut: 只显号码段，同线两辆车号码段相同（桂K00385D 与 桂KR0385 都是 385）就分不出；chip 的 title 里留着全车牌
 
 // 站名的「核心名」：去掉括号注。上游同一处站台会存两条记录，站名一个带注一个不带、id 也不同
 // ——「金城商厦」440-47 与「金城商厦（市中医院）」440-75 就是同一个站台，所以按核心名判同站。
