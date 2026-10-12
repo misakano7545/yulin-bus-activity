@@ -43,10 +43,33 @@ def harvest():
     return pairs
 
 
+def models(min_year=2015):
+    """各车型在本公司的自编号号段。车型页是跨公司的，必须挑 comp.uid == SLUG 那一条。"""
+    comp = get(f"comp/{SLUG}/models")
+    seen, out = set(), []
+    for yr in sorted(comp["models"], reverse=True):
+        for m in comp["models"][yr]:
+            if m["model_id"] in seen or not yr.isdigit() or int(yr) < min_year:
+                continue
+            seen.add(m["model_id"])
+            for s in get("model/" + m["model_id"])["data"]:
+                if (s.get("comp") or {}).get("uid") != SLUG:
+                    continue
+                for b in s["data"]["生产年份"][0]["batches"]:
+                    out.append((b.get("no") or [], b["count"], yr, m["brand_name"][0], m["model"]))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--write", action="store_true", help="把新对写进 plate_map.json")
+    ap.add_argument("--models", action="store_true", help="打印各车型在本公司的自编号号段")
     a = ap.parse_args()
+
+    if a.models:
+        for no, cnt, yr, brand, model in models():
+            print(f"{yr} {brand} {model}: {cnt} 辆  {'、'.join(no) or '（无归档号段）'}")
+        return
 
     pairs = harvest()
     pairs = {no: v for no, v in pairs.items() if no.isdigit() and int(no) >= MIN_NO}
