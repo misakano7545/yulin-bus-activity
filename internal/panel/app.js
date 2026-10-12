@@ -76,7 +76,14 @@ const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
 // 车辆标识的写法：车牌（带省简称汉字，如 桂K03853D）光写车牌，不加后缀；自编号（纯数字，
 // 如 430）后面得跟「号车」，否则「430」看不出是辆车。两个数据面的 fleetNo 语义不同 ——
 // 车来了给自编号、掌上公交直接给车牌。
-const busTag = (no) => (/[\u4e00-\u9fff]/.test(no) ? no : `${no} 号车`);
+const isPlate = (no) => /[\u4e00-\u9fff]/.test(no);
+// 手机上车牌太长：走向条一格 46px，车牌 chip 却 99px —— 两格宽，压到邻站。手机版的列表只写
+// 数字后四位（桂K03853D→3853、桂KR8585→8585），宽屏维持全车牌。
+const busShort = (no) => (wide.matches || !isPlate(no) ? no : no.replace(/\D/g, '').slice(-4));
+const busTag = (no) => (isPlate(no) ? busShort(no) : `${no} 号车`);   // 站点卡、车辆列表
+// 跟踪页标题：触屏没有悬停，title 里那个全车牌看不到，这里得写全
+const busFull = (no) => (isPlate(no) ? no : `${no} 号车`);
+// shortcut: 同线两辆车数字后四位可能撞（桂KR0385 与 桂K00385D 都是 0385）；chip 的 title 里留着全车牌
 
 // 站名的「核心名」：去掉括号注。上游同一处站台会存两条记录，站名一个带注一个不带、id 也不同
 // ——「金城商厦」440-47 与「金城商厦（市中医院）」440-75 就是同一个站台，所以按核心名判同站。
@@ -429,7 +436,7 @@ function renderFollow(box, it, fleetNo) {
 
   const b = (it.rt.buses || []).find((x) => x.fleetNo === fleetNo);
   const h = el('div', 'h');
-  h.append(el('b', null, busTag(fleetNo)), el('span', null, `开往 ${it.dir.end}`));
+  h.append(el('b', null, busFull(fleetNo)), el('span', null, `开往 ${it.dir.end}`));
   box.append(h);
   if (!b) { box.append(el('div', 'sub', '这辆车已不在线上（收班或已到终点）。')); return; }
 
@@ -539,7 +546,7 @@ function renderRail() {
     for (const b of (byOrder.get(s.order) || [])) {
       const chip = el('span', 'bus' + (busSel && busSel.fleetNo === b.fleetNo ? ' on' : ''));
       chip.style.setProperty('--p', String(b.pos));
-      chip.append(busIcon(), el('span', null, b.fleetNo));
+      chip.append(busIcon(), el('span', null, busShort(b.fleetNo)));
       chip.title = `${b.fleetNo} · ${b.state === 1 ? '已到' : '前往'} ${s.name}`;
       chip.addEventListener('click', (e) => { e.stopPropagation(); selectBus(it, b); });
       cell.append(chip);
@@ -702,6 +709,7 @@ function layoutActs() {
   $('#bottomBar').hidden = wide.matches;   // 搬空之后底栏要收掉（还有缩进的空文本节点，:empty 判不出来）
   // 桌面端没有车辆列表（.cardbtns 收掉了），窄屏开着列表时拉宽要把这状态清掉
   if (wide.matches && busListOpen) { busListOpen = false; renderStation(); }
+  renderAll();   // 车牌在窄屏是缩写、宽屏是全车牌 —— 跨过 900px 得重画一遍
 }
 
 async function boot() {
