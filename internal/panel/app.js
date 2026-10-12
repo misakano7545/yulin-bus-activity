@@ -77,11 +77,10 @@ const etaKey = (b) => (b.eta > 0 ? b.eta : Infinity);
 // 如 430）后面得跟「号车」，否则「430」看不出是辆车。两个数据面的 fleetNo 语义不同 ——
 // 车来了给自编号、掌上公交直接给车牌。
 const isPlate = (no) => /[\u4e00-\u9fff]/.test(no);
-// 手机上车牌太长：走向条一格 46px，车牌 chip 却 99px —— 两格宽，压到邻站。手机版站点列表只写号码段
-// 并去掉前导零（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585），宽屏维持全车牌。
+// 手机上只有走向条那格放不下车牌：一格 46px，车牌 chip 却 99px —— 两格宽，压到邻站。所以
+// 那格只写号码段并去掉前导零（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）；宽屏该格
+// 放得下，维持全车牌。其余地方（站点卡、车辆列表、跟踪页标题）都是一整行，写全车牌。
 const busShort = (no) => (wide.matches || !isPlate(no) ? no : no.replace(/\D/g, '').replace(/^0+/, ''));
-const busTag = (no) => (isPlate(no) ? busShort(no) : `${no} 号车`);   // 站点列表：站点卡、走向条 chip
-// 写全车牌的地方：跟踪页标题、车辆列表 —— 触屏没有悬停，title 里那个全车牌看不到，这两处得写全
 const busFull = (no) => (isPlate(no) ? no : `${no} 号车`);
 // shortcut: 只显号码段，同线两辆车号码段相同（桂K00385D 与 桂KR0385 都是 385）就分不出；chip 的 title 里留着全车牌
 
@@ -419,7 +418,7 @@ function renderStation() {
   const rt = stopCache.get(`${it.dir.lineId}:${s.order}`);
   const b = rt && (rt.buses || []).filter((x) => x.order <= s.order && x.eta > 0)
     .sort((x, y) => etaKey(x) - etaKey(y))[0];
-  if (b) box.append(el('div', 'sub', `${busTag(b.fleetNo)} · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
+  if (b) box.append(el('div', 'sub', `${busFull(b.fleetNo)} · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
   // 桌面端右栏够宽：点站就把全部车辆直接接在卡片下面，不用再点一次「车辆列表」
   if (wide.matches) { box.classList.add('follow'); renderBusList(box, it, true); }
 }
