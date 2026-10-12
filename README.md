@@ -143,8 +143,18 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 
 ## 车牌 → 自编号映射（`plate_map.json`）
 
-表里目前只有 549–554 这 6 辆。车来了那面凡是拿到车牌（`licence`）的车都往这张表加，
-代码不用改；掌上公交那面不查这张表（见「第二条数据面」那节的字段表）。
+**两个数据面都查这张表**：车来了那边上游 `licence` 有时给车牌，掌上公交那边 `busNumber`
+整个就是车牌，两边都靠它归一成自编号。表里没有的车牌原样透出 —— 掌上公交那边按「车牌就是
+车牌」显示（见「第二条数据面」那节的字段表）。加表不用改代码，改完重启即可。
+
+表里现有 16 辆：
+
+| 自编号 | 车牌 | 车队 | 来源 |
+|---|---|---|---|
+| 392–401 | 桂K12620D、桂K03281D、桂K11819D、桂K01773D、桂K04011D、桂K11860D、桂K08893D、桂K03296D、桂K09778D、桂K12691D | 玉林公交，2018-09/10 出厂，10 辆 | 车辆信息页截图逐张核对（10 张） |
+| 549–554 | 桂K12697D、桂K12593D、桂K12685D、桂K11878D、桂K08701D、桂K12631D | 2024 年，6 辆（详见下） | buspedia 交叉核验（见下） |
+
+392–401 这批就是跑县市线路（陆川1路等）的车。
 
 车来了的 `licence` 字段**类型不稳定**，同一支车队里两种写法都出现：
 
@@ -211,7 +221,7 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 | `buses[].state` | `list[].statusType` | `"0"` = 已到站 —— **相对车自己那站**（官方包注释「到站的直接赋值为最近站」），其余 = 在途 |
 | `buses[].pos` | 车坐标在两站之间投影 | 车与站同一坐标基准（104 的 `station_lat` 与 103 逐位相同），直接算比例 |
 | `buses[].eta` | `routeOnStationRTimeInfoList[].busToStationTime` × 60 | 上游给的是分钟；点站时按 `STATIONORDER` 问该站 |
-| `buses[].fleetNo`/`rawId` | `list[].busNumber` | **就是车牌**（车来了那边多是自编号），所以不过 `plate_map`、`confidence` 恒 `high`；面板按形态写：车牌光写车牌，自编号写「X 号车」。手机版列表里车牌只写**号码段去前导零**（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）—— 走向条一格 46px 放不下全车牌，全车牌留在 chip 的 `title` 与跟踪页标题里 |
+| `buses[].fleetNo`/`rawId` | `list[].busNumber` | `busNumber` **就是车牌**，跟车来了那面一样过一遍 `plate_map.json` 归一成自编号；表里没有的（北流市公交那几辆）原样透出，`confidence` 仍 `high` —— 车牌本身就是稳定标识，不算未知。面板按形态写：车牌光写车牌，自编号写「X 号车」。手机版列表里车牌只写**号码段去前导零**（桂K02281D→2281、桂K11223D→11223、桂KR8585→8585）—— 走向条一格 46px 放不下全车牌，全车牌留在 chip 的 `title` 与跟踪页标题里 |
 | `buses[].updatedAt` | `list[]._recTime` | 毫秒，是上游自己的记录时间，不是本地 `now` |
 | `price` | `commonts` 里的「票价：X」 | 全线路只有这一处写着票价 |
 | `state` / `desc` | `runState` / `hasReal` | `runState=1` → 停运；`hasReal=0` → 未开通实时查询 |

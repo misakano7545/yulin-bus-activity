@@ -28,9 +28,9 @@ func main() {
 	up := upstream.New(plates)
 	go up.StartLineStateLoop(context.Background()) // 线路列表的停运标记靠它
 
-	// 掌上公交那条数据面只补县市线路（北流105路），市区线路照旧走车来了。
-	mg := mygolbs.New()
-	log.Printf("掌上公交线路: %d 个方向", 2)
+	// 掌上公交那条数据面只补县市线路（北流105路、陆川1路），市区线路照旧走车来了。
+	// 它同样要那张映射表：陆川1路的车跟市区是同一家公司的车队。
+	mg := mygolbs.New(plates)
 
 	log.Printf("监听 %s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, server.NewHandler(server.Config{Upstream: up, Mygolbs: mg})))

@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/misakano7545/yulin-bus-activity/internal/plate"
 	"github.com/misakano7545/yulin-bus-activity/internal/upstream"
 )
 
@@ -56,7 +58,7 @@ func newTestClient(t *testing.T) *Client {
 	}))
 	t.Cleanup(srv.Close)
 
-	c := New()
+	c := New(nil)
 	c.base = srv.URL
 	return c
 }
@@ -213,7 +215,7 @@ func TestHandles(t *testing.T) {
 	if Handles("775200849296") {
 		t.Error("车来了的 lineId（纯数字）不该被认领")
 	}
-	if _, err := New().Route(context.Background(), "775200849296"); err == nil {
+	if _, err := New(nil).Route(context.Background(), "775200849296"); err == nil {
 		t.Error("不认识的 lineId 该报错")
 	}
 }
@@ -224,7 +226,7 @@ func TestUpstreamFailure(t *testing.T) {
 		_, _ = w.Write([]byte(`{"status":"-1","msg":"暂无数据信息！"}`))
 	}))
 	defer srv.Close()
-	c := New()
+	c := New(nil)
 	c.base = srv.URL
 	_, err := c.Route(context.Background(), "mg40105-1")
 	if err == nil || !strings.Contains(err.Error(), "暂无数据信息") {
@@ -239,7 +241,7 @@ func TestGateBlob(t *testing.T) {
 		_, _ = w.Write([]byte(blob))
 	}))
 	defer srv.Close()
-	c := New()
+	c := New(nil)
 	c.base = srv.URL
 	_, err := c.Route(context.Background(), "mg40105-1")
 	if err == nil || !strings.Contains(err.Error(), "Origin") {
@@ -290,4 +292,42 @@ func TestRouteDataCached(t *testing.T) {
 	if time.Since(at) > time.Minute {
 		t.Errorf("站表缓存是 %v 前写的，应当是刚取的那份", time.Since(at))
 	}
+}
+
+// 给了映射表就归一：FleetNo 取自编号，RawID 留上游的车牌 —— 出问题还能对回上游。
+// 表里没有的车牌（北流市公交那几辆）原样透出，见 TestRealtimeToTerminus 那几条断言。
+func TestRealtimeUsesPlateMap(t *testing.T) {
+	tab, err := plate.Load("testdata/plate_map.json")
+	if err != nil {
+		t.Fatalf("读测试映射表: %v", err)
+	}
+	c := newTestClient(t)
+	c.plates = tab
+	rt, err := c.Realtime(context.Background(), "mg40105-1", 0)
+	if err != nil {
+		t.Fatalf("Realtime: %v", err)
+	}
+	by := map[string]upstream.Bus{}
+	for _, b := range rt.Buses {
+		by[b.FleetNo] = b
+	}
+	b, ok := by["399"]
+	if !ok {
+		t.Fatalf("桂KR8698 应归一成 399，实际编号: %v", keys(by))
+	}
+	if b.RawID != "桂KR8698" {
+		t.Errorf("rawId = %q，应留上游的车牌", b.RawID)
+	}
+	if b.ETA != 0 || b.Order != 6 {
+		t.Errorf("归一不该动别的字段: %+v", b)
+	}
+}
+
+func keys(m map[string]upstream.Bus) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

@@ -20,6 +20,24 @@ func TestFleetNo(t *testing.T) {
 	}
 }
 
+// Lookup 是悄悄查表那条路：nil 表当空表、纯数字不查表，都不该 panic。
+func TestLookup(t *testing.T) {
+	var nilTab *Table
+	if _, ok := nilTab.Lookup("桂K12685D"); ok {
+		t.Error("nil 表应查不到")
+	}
+	tab := &Table{m: map[string]string{"桂K12685D": "551"}}
+	if n, ok := tab.Lookup("桂K12685D"); !ok || n != "551" {
+		t.Errorf("Lookup(已知车牌) = (%q,%v)", n, ok)
+	}
+	if _, ok := tab.Lookup("433"); ok {
+		t.Error("纯数字不是表里的项，Lookup 应说没有")
+	}
+	if _, ok := tab.Lookup("桂K99999D"); ok {
+		t.Error("表里没有的车牌应说没有")
+	}
+}
+
 func TestLoadMissingFileGivesEmptyTable(t *testing.T) {
 	tab, err := Load("no-such-file.json")
 	if err == nil {
