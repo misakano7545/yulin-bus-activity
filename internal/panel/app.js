@@ -129,6 +129,10 @@ const DIR_NOTES = [
     text: '因玉林市第三人民医院（玉林市第十中学）为学生离校返校时的临时站，' +
           '故页面显示的首末站为：毅德国际商贸城和火车站',
   },
+  {
+    line: '北流105路',
+    text: '此线路可在医科大学生集中离校返校日（周末、节假日）去往医科大学玉林校区',
+  },
 ];
 function dirNote(d) {
   return DIR_NOTES.find((n) => n.line === d.name &&
