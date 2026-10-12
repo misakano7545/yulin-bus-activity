@@ -20,6 +20,8 @@ import (
 // 顺带断言每个请求都带了 Origin —— 缺了它上游永远回同一个 47 字节网关串，是这套接口最容易踩的坑。
 func newTestClient(t *testing.T) *Client {
 	t.Helper()
+	// 注意：这个假上游不看 LINENAME，任何线路都回同一份北流105路的抓包 —— 够验字段映射，
+	// 但别拿它断言某条线的站名。
 	files := map[string]string{
 		"103/1":    "103_dir1.json",
 		"103/2":    "103_dir2.json",
@@ -170,8 +172,14 @@ func TestLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Lines: %v", err)
 	}
-	if len(ls) != 2 {
-		t.Fatalf("线路数 = %d，目录里是 2 个方向", len(ls))
+	if len(ls) != len(catalog) {
+		t.Fatalf("线路数 = %d，目录里是 %d 个方向", len(ls), len(catalog))
+	}
+	// 目录里每条都要在 /lines 里出现 ID 与线路名对得上的一行 —— 加县市线路时不用改这段
+	for i, s := range catalog {
+		if ls[i].LineID != s.ID || ls[i].Name != s.LineName || ls[i].Src != srcName {
+			t.Errorf("第 %d 条 = %+v，目录里是 %+v", i, ls[i], s)
+		}
 	}
 	fst := ls[0]
 	if fst.LineID != "mg40105-1" || fst.Name != "北流105路" || fst.Src != "掌上公交" {
@@ -198,6 +206,9 @@ func TestLines(t *testing.T) {
 func TestHandles(t *testing.T) {
 	if !Handles("mg40105-1") {
 		t.Error("掌上公交的 lineId 应被认领")
+	}
+	if !Handles("mg1011-2") {
+		t.Error("陆川1路的 lineId 应被认领")
 	}
 	if Handles("775200849296") {
 		t.Error("车来了的 lineId（纯数字）不该被认领")

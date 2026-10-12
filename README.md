@@ -77,7 +77,7 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 | 路径 | 说明 |
 |---|---|
 | `GET /healthz` | 存活 |
-| `GET /lines` | 全部线路（48 个方向 = 车来了 46 + 掌上公交 2），含后台刷出来的运营状态与车辆数 |
+| `GET /lines` | 全部线路（50 个方向 = 车来了 46 + 掌上公交 4），含后台刷出来的运营状态与车辆数 |
 | `GET /lines/{lineId}` | 单条线路：站表、走向、首末班、票价 |
 | `GET /lines/{lineId}/realtime?targetOrder=N` | 实时车辆；带 `targetOrder` 时 ETA 算到第 N 站，不带则算到终点 |
 | `GET /` | 面板 |
