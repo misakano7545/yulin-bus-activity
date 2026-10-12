@@ -45,7 +45,8 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 （`.rail{width:max-content}` —— 只写 `min-width` 的话 `display:flex` 是块级盒，轴线会跟着铺满
 容器、伸到末站之外。站少到撑不满时（广西先进专线 6 站）再 `min-width:100%` +
 `justify-content:space-between`，多出来的宽度摊进站距，右边不留空；站多到溢出时 free space 为负、
-退回左对齐照旧横滚，格宽始终 46px，所以桌面端（竖排）要显式把 `justify-content` 收回去）。
+退回左对齐照旧横滚，格宽始终 46px。桌面端（竖排）要显式收回去 —— 收回时必须用**同一条选择器**
+（`(0,2,0)` 的 `.rail:not(:empty)` 压得住 `(0,1,0)` 的 `.rail`），否则 6 行会被纵向摊开）。
 
 桌面端（≥900px）分三栏：左栏 284px 线路导航，右栏内容区再分「站点轴 1fr（≤920px）| 详情
 440px」。配套几处：

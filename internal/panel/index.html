@@ -390,8 +390,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
   .railwrap{grid-area:2/1/4/2;margin:20px 0 0;min-height:0;overflow-y:auto;overflow-x:hidden;
     padding:4px 16px;max-width:920px;background:var(--md-sys-color-surface-container-low);
     border-radius:var(--md-sys-shape-lg)}
-  .rail{margin:0;padding:0;min-width:0;width:auto;flex-direction:column;align-items:stretch;
-    justify-content:flex-start}
+  .rail{margin:0;padding:0;min-width:0;width:auto;flex-direction:column;align-items:stretch}
+  /* 收回 justify-content 必须用上面那条一样的选择器：.rail:not(:empty) 特异性 (0,2,0)
+     比 .rail (0,1,0) 高，写成 .rail 根本压不住，桌面端竖排会被纵向摊开 */
+  .rail:not(:empty){justify-content:flex-start}
   /* 竖轴：从首个站块中心画到末个站块中心（行高固定 --ch，所以上下各让半行） */
   .rail::before{left:21px;right:auto;top:calc(var(--ch) / 2);bottom:calc(var(--ch) / 2);
     width:8px;height:auto}
