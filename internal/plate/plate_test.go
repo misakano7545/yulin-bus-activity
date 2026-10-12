@@ -38,6 +38,28 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+// 仓库里那张真表要守住两条：自编号不重复（一车一号），值必须是纯数字。
+// 抄错的成对录入（同一号码给两块车牌）在 JSON 里不会报错，只能靠这里挡。
+func TestRepoPlateMapIsConsistent(t *testing.T) {
+	tab, err := Load("../../plate_map.json")
+	if err != nil {
+		t.Fatalf("读仓库映射表: %v", err)
+	}
+	if tab.Len() < 20 {
+		t.Fatalf("映射表只有 %d 条，像是没读到", tab.Len())
+	}
+	seen := map[string]string{}
+	for plate, no := range tab.m {
+		if !digitsOnly.MatchString(no) {
+			t.Errorf("%s 的自编号 %q 不是纯数字", plate, no)
+		}
+		if prev, dup := seen[no]; dup {
+			t.Errorf("自编号 %s 同时给了 %s 和 %s", no, prev, plate)
+		}
+		seen[no] = plate
+	}
+}
+
 func TestLoadMissingFileGivesEmptyTable(t *testing.T) {
 	tab, err := Load("no-such-file.json")
 	if err == nil {
