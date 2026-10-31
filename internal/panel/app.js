@@ -13,7 +13,6 @@
 'use strict';
 
 const $ = (s) => document.querySelector(s);
-const REFRESH_MS = 10000;
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 let routes = [];      // 按线路名合并后的 21 条：{name, dirs:[Line,…], alt, tag}
@@ -26,7 +25,8 @@ let focusId = null;   // 手动切到的方向（lineId）；null = 第一个方
 let shift = 'day';    // 'day' | 'alt'：日班/普通 vs 夜班/定制
 let shiftTouched = false;  // 用户手动切过变体 —— 之后日班收班也不自动切了
 let shifts = { day: [], alt: [] };
-let timer = null;
+// 自动刷新的状态（见「自动刷新」那段）：只剩 setTimeout 排期，没有 setInterval
+let pollTimer = null, pollAt = 0, inFlight = false, failStreak = 0, updMsg = '—';
 // 桌面端断点，跟 index.html 里那块 @media (min-width:900px) 是同一个数
 const wide = matchMedia('(min-width:900px)');
 let stopCache = new Map();       // `${lineId}:${order}` → 该站的到站快照
@@ -302,6 +302,7 @@ function onHash() {
     openLine(routes[0].name);
   } else {
     current = null;
+    schedulePoll(null);   // 回到列表页就别刷了：这页上没有任何实时数据
     $('#vList').hidden = false;
     $('#vDetail').hidden = true;
   }
@@ -668,6 +669,55 @@ function renderRail() {
   }
 }
 
+/* ── 自动刷新 ───────────────────────────────────────────────────────
+   照 Trackr 的轮询协调器（PollingCoordinator）那几条：页面不可见就停轮询（那边靠
+   setActive 跟生命周期）、同一时刻只允许一趟在飞、失败退避、手动刷新重置节奏。
+   Trackr 是 10 秒固定档，这里不能照抄 —— 那边客户端打的是自家后端，这边每一趟都直
+   接落到车来了（实时接口只缓 10 秒）。所以间隔按「车离你选的站多远」分两档：
+   车还在 8 站外时，15 秒和 45 秒刷到的是同一件事，没必要那么勤。 */
+const POLL_NEAR = 15000;   // 车 ≤3 站，或者正在跟某一辆车
+const POLL_FAR = 45000;    // 其余时候
+const POLL_CEIL = 180000;  // 连续失败最长退到 3 分钟
+
+function pollBase() {
+  const it = detail.length ? focusDir() : null;
+  const s = it && sel && it.stops.find((x) => x.order === sel.order);
+  const up = s ? upcoming(it, s) : null;
+  return busSel || (up && up.left <= 3) ? POLL_NEAR : POLL_FAR;
+}
+
+// ms == null 表示停轮询（隐藏 / 停在列表页），下次由 select 或 visibilitychange 重新排
+function schedulePoll(ms) {
+  clearTimeout(pollTimer);
+  pollTimer = ms == null ? null : setTimeout(tick, ms);
+  pollAt = ms == null ? 0 : Date.now() + ms;
+  paintUpd();
+}
+
+async function tick() {
+  pollTimer = null;
+  if (!current || document.hidden) return schedulePoll(null);
+  if (inFlight) return schedulePoll(1000);   // 手动刷新/上一趟还压着，等它回来
+  inFlight = true;
+  let ok;
+  try { ok = (await refresh()) !== false; } finally { inFlight = false; }
+  failStreak = ok ? 0 : failStreak + 1;
+  // 失败按 2 倍退避（上游 5xx 或限流多半是短时，越刷越糟），成功后回基准；
+  // ±20% 抖动，免得几个标签页排在同一秒一起打
+  const base = failStreak ? Math.min(POLL_CEIL, pollBase() * 2 ** failStreak) : pollBase();
+  schedulePoll(Math.round(base * (0.8 + Math.random() * 0.4)));
+}
+
+// 数据时间戳 + 下次刷新倒计时。倒计时不是为了好看：退避到 3 分钟、或页面在后台停
+// 了轮询，光看时间戳分不出「同步慢了」和「压根没在刷」。
+function paintUpd() {
+  const left = pollAt ? Math.max(0, Math.ceil((pollAt - Date.now()) / 1000)) : 0;
+  const tail = document.hidden ? ' · 已暂停（页面在后台）'
+    : pollAt ? ` · ${left} 秒后刷新` : '';
+  $('#upd').textContent = updMsg + tail;
+  $('#navUpd').textContent = updMsg + tail;
+}
+
 /* ── 交互 ─────────────────────────────────────────────────────────── */
 // 点站：这站成为当前站，并单独问一次上游拿「到该站」的 ETA。
 async function selectStop(it, s) {
@@ -764,9 +814,7 @@ async function refresh() {
     $('#upd').className = 'upd';
     // 数据面按线路走（车来了 / 掌上公交），名字由后端在 line.src 里给
     const src = (g.dirs[0] && g.dirs[0].src) || '车来了';
-    const stamp = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · ${src}`;
-    $('#upd').textContent = stamp;
-    $('#navUpd').textContent = stamp;   // 左栏脚同款（那行只在桌面端显示）
+    updMsg = `数据更新 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })} · ${src}`;
     renderLines($('#q').value);
     renderAll();
     // sel 空着但有选中车辆 = 车辆跟踪页，renderAll 里的 ensureSel 刚把 sel 补上 —— 这一趟
@@ -778,8 +826,9 @@ async function refresh() {
     else sel = null;
   } catch (e) {
     $('#upd').className = 'upd bad';
-    $('#upd').textContent = `取实时数据失败：${e.message}`;
+    updMsg = `取实时数据失败：${e.message}`;
     renderAll();
+    return false;     // 让 tick 知道这趟挂了，退避下一趟
   }
 }
 
@@ -801,6 +850,8 @@ async function select(name) {
   $('#rail').textContent = '';
   renderLines($('#q').value);
   await refresh();
+  failStreak = 0;             // 换线路：退避清零，按新数据重排
+  schedulePoll(pollBase());
 }
 
 // 桌面端左栏常驻，窄屏那颗浮动胶囊在宽屏没地方待 —— 三个动作挪进顶栏右侧的胶囊里；
@@ -821,7 +872,8 @@ async function boot() {
   wide.addEventListener('change', layoutActs);
   $('#q').addEventListener('input', (e) => renderLines(e.target.value));
   $('#btnBack').addEventListener('click', () => history.back());
-  $('#btnRefresh').addEventListener('click', () => { stopCache.clear(); refresh(); });
+  // 手动刷新 = Trackr 的 refreshNow：清缓存 + 立即取一趟 + 倒计时重新开始
+  $('#btnRefresh').addEventListener('click', () => { stopCache.clear(); failStreak = 0; tick(); });
   // 底栏「换向」和卡片下的「反方向站点」是同一件事，共用一个 handler。
   // 有同名站就落到同名站；这站反向没有（单边站）就换向并落到那边的默认站 ——
   // 总之一定换得过去，不会点了没反应。
@@ -845,12 +897,16 @@ async function boot() {
   });
   $('#btnFav').addEventListener('click', toggleFav);
   window.addEventListener('hashchange', onHash);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) schedulePoll(null);   // 后台不刷：Chrome 会把它降到 1 分钟一次，还在打上游
+    else tick();                               // 回前台先补一趟，别让人盯着旧数据
+  });
+  setInterval(paintUpd, 1000);   // 只重写那行倒计时，不取数
   try {
     routes = groupByName(await api('/lines'));
     renderLines('');
     onHash();     // 直接开在线路页（带 hash）也能回到那条线
-    timer = setInterval(() => { if (current) refresh(); }, REFRESH_MS);
+    schedulePoll(current ? pollBase() : null);   // 停在列表页就不排；进线路页由 select 排
   } catch (e) {
     $('#lines').textContent = '';
     $('#lines').append(el('li', 'note bad', `取线路失败：${e.message}`));

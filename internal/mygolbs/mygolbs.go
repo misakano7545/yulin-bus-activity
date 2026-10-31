@@ -44,6 +44,9 @@ const (
 	// 站表/首末站这些静态信息变得慢；/lines 上那段带车辆数，按分钟刷。
 	ttlStatic  = time.Hour
 	ttlCatalog = time.Minute
+	// ttlRealtime 跟车来了那边同一个理由（见 upstream.client.go）：面板最短 15 秒一刷，
+	// 这个面原来一次都不缓存 —— 开两个标签页就是双倍上游请求，掌上公交对频率更敏感。
+	ttlRealtime = 10 * time.Second
 )
 
 // spec 是一条要发布的掌上公交线路方向。面板里的 lineId = "mg" + routeId + "-" + 方向
@@ -108,11 +111,17 @@ type Client struct {
 	routes  map[string]entry // 103 的原始响应，按线路方向缓存
 	lines   []upstream.Line  // /lines 那一段（含车辆数）
 	linesAt time.Time
+	rt      map[string]rtEntry // 104 的实时响应，按「线路:目标站」缓存
 }
 
 type entry struct {
 	wire wireRoute
 	at   time.Time
+}
+
+type rtEntry struct {
+	rt *upstream.Realtime
+	at time.Time
 }
 
 func New(plates *plate.Table) *Client {
@@ -207,6 +216,13 @@ func (c *Client) Realtime(ctx context.Context, lineID string, target int) (*upst
 	if target <= 0 {
 		target = len(w.Data)
 	}
+	key := lineID + ":" + strconv.Itoa(target)
+	c.mu.Lock()
+	hit, ok := c.rt[key]
+	c.mu.Unlock()
+	if ok && time.Since(hit.at) < ttlRealtime {
+		return hit.rt, nil
+	}
 
 	body, err := c.call(ctx, url.Values{
 		"CMD": {"104"}, "CITYNAME": {s.CityName}, "CITYCODE": {s.CityCode},
@@ -268,6 +284,12 @@ func (c *Client) Realtime(ctx context.Context, lineID string, target int) (*upst
 		}
 		rt.Buses = append(rt.Buses, bus)
 	}
+	c.mu.Lock()
+	if c.rt == nil {
+		c.rt = map[string]rtEntry{}
+	}
+	c.rt[key] = rtEntry{rt: rt, at: time.Now()}
+	c.mu.Unlock()
 	return rt, nil
 }
 

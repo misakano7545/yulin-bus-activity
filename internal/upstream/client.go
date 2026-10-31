@@ -37,7 +37,11 @@ const (
 	userAgent = "Mozilla/5.0 (Linux; Android 13) Mobile MicroMessenger/8.0"
 	srcName   = "车来了" // 面板底部「数据更新 … · X」用的名字
 
-	ttlRealtime = 5 * time.Second
+	// ttlRealtime 同时是「别的客户端撞上同一趟」的唯一缓冲：面板最短 15 秒一刷
+	// （见 app.js 的 POLL_NEAR），保留 5 秒等于每次都穿透；10 秒能把同时开着的
+	// 几个标签页/设备并到一趟上游请求上，代价是数据最多旧 10 秒（上游 ETA 本来就是
+	// 分钟级）。别再往下调，除非面板那边也一起降频。
+	ttlRealtime = 10 * time.Second
 	ttlStatic   = time.Hour
 	// ttlLineState 线路状态（停运与否）的刷新间隔。状态变得慢（停运一次好几天），
 	// 而刷新要 46 次加密调用，所以隔久一点；列表只用它标「停运」，点进线路页看的是实时真值。

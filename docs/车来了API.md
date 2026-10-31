@@ -338,7 +338,7 @@ GET /api/bus/line!encryptedLineDetail.action?...公共参数...
 |---|---|---|---|
 | 目录 | `lines` | 1h | 线路一天不变 |
 | 站表 + 折线 | `route:<lineId>` | 1h | 静态 |
-| 实时 | `rt:<lineId>:<targetOrder>` | 5s | 上游本身就是 5~10 秒一跳 |
+| 实时 | `rt:<lineId>:<targetOrder>` | 10s | 面板最短 15 秒一刷（见 README「自动刷新」）；留 10 秒是为了几个客户端并发时能并成一趟 |
 | 线路状态表 | `lineStates` | 5m | 后台刷，请求只读缓存 |
 
 线路状态是**专门的后台循环**：46 条方向并发 6 拉一遍实时，结果塞缓存；

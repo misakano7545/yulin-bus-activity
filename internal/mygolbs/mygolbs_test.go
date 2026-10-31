@@ -379,6 +379,26 @@ func TestRealtimeUsesPlateMap(t *testing.T) {
 	}
 }
 
+// 实时缓存：面板 15 秒一刷、点站还要单独问一次，同一个 (线路, 目标站) 在 10 秒内
+// 只该打一趟上游 —— 掌上公交对频率比车来了敏感，这里原来一次都不缓存。
+func TestRealtimeCached(t *testing.T) {
+	c := newTestClient(t)
+	ctx := context.Background()
+	if _, err := c.Realtime(ctx, "mg40105-1", 10); err != nil {
+		t.Fatalf("Realtime: %v", err)
+	}
+	// 把上游指到黑洞：这一趟只能从缓存里出来
+	c.base = "http://127.0.0.1:1"
+	if _, err := c.Realtime(ctx, "mg40105-1", 10); err != nil {
+		t.Fatalf("10 秒内同一目标站应命中缓存，却打到了上游: %v", err)
+	}
+	c.base = "http://127.0.0.1:1"
+	// 换个目标站是另一个键，必须回上游 —— 上游还是黑洞，所以这里应该报错
+	if _, err := c.Realtime(ctx, "mg40105-1", 24); err == nil {
+		t.Error("换了目标站还命中缓存 —— 键里少了 STATIONORDER，ETA 会串站")
+	}
+}
+
 func keys(m map[string]upstream.Bus) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
