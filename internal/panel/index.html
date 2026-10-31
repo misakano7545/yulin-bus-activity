@@ -4,269 +4,284 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>玉林实时公交</title>
-<meta name="theme-color" content="#f6faf6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111411" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5fbf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111412" media="(prefers-color-scheme: dark)">
 <style>
-/* ── Material Design 3 令牌 ──────────────────────────────────────────
-   种子色 = 品牌线路绿 #0ab84a；色度按 MD3 上限截到 ≈HCT 40（不截就成了
-   霓虹色，容器色会刺眼）。色调板离线算，tone 就是 CIELAB 的 L*：
-   scripts/md3_tokens.py（改种子色改那里跑一次，别手改下面两段）。
-   route / bus 是自定义色角色（MD3 允许）：route 只画走向条轴线，bus 只给公交色块。 */
+/* ── Material 3 Expressive 令牌 ─────────────────────────────────────
+   种子色 = #006c4c（深青绿），色调板离线算，tone 就是 CIELAB 的 L*：
+   scripts/md3_tokens.py（改种子色改那里跑一次 --all，别手改下面两段）。
+   route / bus / bus-run … 是自定义色角色（MD3 允许）：route 只画轴线，
+   bus 系列只给车辆与到站状态，语义色照 Trackr 那套（绿=在途、橙=即将到站、
+   灰=已过站、红=条件启用站）。 */
 :root{
   color-scheme:light dark;
   /* 亮色方案 */
-  --md-sys-color-primary:#276b34;
+  --md-sys-color-primary:#006c4c;
   --md-sys-color-on-primary:#ffffff;
-  --md-sys-color-primary-container:#adf3b2;
-  --md-sys-color-on-primary-container:#002201;
-  --md-sys-color-secondary:#506350;
+  --md-sys-color-primary-container:#8ef7ca;
+  --md-sys-color-on-primary-container:#002115;
+  --md-sys-color-primary-fixed:#8ef7ca;
+  --md-sys-color-on-primary-fixed:#002115;
+  --md-sys-color-primary-fixed-dim:#72daaf;
+  --md-sys-color-secondary:#486457;
   --md-sys-color-on-secondary:#ffffff;
-  --md-sys-color-secondary-container:#d2e8d2;
-  --md-sys-color-on-secondary-container:#0e1f0f;
-  --md-sys-color-tertiary:#176873;
+  --md-sys-color-secondary-container:#c9eada;
+  --md-sys-color-on-secondary-container:#052016;
+  --md-sys-color-tertiary:#20667c;
   --md-sys-color-on-tertiary:#ffffff;
-  --md-sys-color-tertiary-container:#a7eefb;
-  --md-sys-color-on-tertiary-container:#001f24;
+  --md-sys-color-tertiary-container:#b8eaff;
+  --md-sys-color-on-tertiary-container:#001f29;
   --md-sys-color-error:#ba1a1a;
   --md-sys-color-on-error:#ffffff;
   --md-sys-color-error-container:#ffdad6;
   --md-sys-color-on-error-container:#410002;
-  --md-sys-color-background:#f9fdf9;
-  --md-sys-color-on-background:#191c19;
-  --md-sys-color-surface:#f6faf6;
-  --md-sys-color-on-surface:#191c19;
-  --md-sys-color-surface-variant:#dbe5dc;
-  --md-sys-color-on-surface-variant:#414941;
-  --md-sys-color-surface-dim:#d7dbd7;
+  --md-sys-color-background:#f8fefb;
+  --md-sys-color-on-background:#181c1a;
+  --md-sys-color-surface:#f5fbf8;
+  --md-sys-color-on-surface:#181c1a;
+  --md-sys-color-surface-variant:#d8e6df;
+  --md-sys-color-on-surface-variant:#3e4944;
+  --md-sys-color-surface-dim:#d6dbd8;
+  --md-sys-color-surface-bright:#f5fbf8;
   --md-sys-color-surface-container-lowest:#ffffff;
-  --md-sys-color-surface-container-low:#f1f5f1;
-  --md-sys-color-surface-container:#ebefeb;
-  --md-sys-color-surface-container-high:#e5e9e5;
-  --md-sys-color-surface-container-highest:#e0e3df;
-  --md-sys-color-outline:#717971;
-  --md-sys-color-outline-variant:#c0c9c0;
-  --md-sys-color-inverse-surface:#2e312e;
-  --md-sys-color-inverse-on-surface:#eef2ee;
-  --md-sys-color-inverse-primary:#92d798;
+  --md-sys-color-surface-container-low:#eff5f2;
+  --md-sys-color-surface-container:#e9efec;
+  --md-sys-color-surface-container-high:#e4e9e7;
+  --md-sys-color-surface-container-highest:#dee4e1;
+  --md-sys-color-outline:#6e7a74;
+  --md-sys-color-outline-variant:#bccac3;
+  --md-sys-color-inverse-surface:#2d312f;
+  --md-sys-color-inverse-on-surface:#ecf2ef;
+  --md-sys-color-inverse-primary:#72daaf;
   --md-sys-color-scrim:#000000;
   --md-sys-color-shadow:#000000;
-  --md-sys-color-route:#0ab84a;
-  /* 公交色块：自定义角色，蓝。小色块要一眼看出是蓝，色度放到 56；L* 固定在 40
-     所以跟白字的对比度还是 6.5:1，跟品牌绿、tertiary 的青都不撞。 */
-  --md-sys-color-bus:#005db7;
-  --md-sys-color-on-bus:#ffffff;
+  --md-sys-color-route:#16a34a;
 
-  /* 形状（MD3 shape scale）*/
-  --md-sys-shape-xs:4px;   --md-sys-shape-sm:8px;  --md-sys-shape-md:12px;
-  --md-sys-shape-lg:16px;  --md-sys-shape-xl:28px; --md-sys-shape-full:999px;
-  /* 高度（MD3 elevation level 1/2）*/
-  --md-sys-elevation-1:0 1px 2px rgba(0,0,0,.3),0 1px 3px 1px rgba(0,0,0,.15);
-  --md-sys-elevation-2:0 1px 2px rgba(0,0,0,.3),0 2px 6px 2px rgba(0,0,0,.15);
-  /* 状态层（MD3：hover 8% / focus 10% / pressed 10%）*/
-  --md-sys-state-hover:color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
-  --md-sys-state-press:color-mix(in srgb, var(--md-sys-color-on-surface) 10%, transparent);
+  /* 公交语义色（Trackr BusSemanticColors 的一套，明暗各一份） */
+  --bus:#dcfce7;             /* 车辆 chip 底 */
+  --on-bus:#14532d;          /* 车辆 chip 字 */
+  --bus-run:#15803d;         /* 在途 / 已到站 */
+  --bus-arrive:#b45309;      /* 即将到站：34px 大字要过 3:1，用 amber-700 而不是 600 */
+  --bus-pass:#94a3b8;        /* 已过站 */
+  --track:#16a34a;           /* 已行经的轴线 */
+  --track-off:#cbd5e1;       /* 未行经的轴线 */
+  --stop-cond:#e11d48;       /* 条件启用站 */
+  --stn-card:#f1f5f9;        /* 到站卡柔和底 */
+
+  /* 形状（MD3 shape scale + M3E 大圆角）*/
+  --shape-xs:4px; --shape-sm:8px; --shape-md:12px; --shape-lg:16px;
+  --shape-xl:20px; --shape-2xl:28px; --shape-full:999px;
+  /* 高度 */
+  --elev-1:0 1px 2px rgba(0,0,0,.14),0 1px 3px 1px rgba(0,0,0,.08);
+  --elev-2:0 2px 6px rgba(0,0,0,.16),0 1px 2px rgba(0,0,0,.10);
+  --elev-3:0 4px 12px rgba(0,0,0,.18),0 2px 4px rgba(0,0,0,.10);
+  /* 状态层（MD3：hover 8% / pressed 10%）*/
+  --state-hover:color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
+  --state-press:color-mix(in srgb, var(--md-sys-color-on-surface) 10%, transparent);
 
   --sans:Roboto,"Noto Sans SC","WenQuanYi Zen Hei",system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   --cw:46px;   /* 走向条每站一格宽，车辆的段内插值也按它换算 —— 改名会散架 */
 }
 @media (prefers-color-scheme: dark){
 :root{
-  --md-sys-color-primary:#92d798;
-  --md-sys-color-on-primary:#003911;
-  --md-sys-color-primary-container:#06521e;
-  --md-sys-color-on-primary-container:#adf3b2;
-  --md-sys-color-secondary:#b6ccb7;
-  --md-sys-color-on-secondary:#223524;
-  --md-sys-color-secondary-container:#384b39;
-  --md-sys-color-on-secondary-container:#d2e8d2;
-  --md-sys-color-tertiary:#8bd2de;
-  --md-sys-color-on-tertiary:#00363d;
-  --md-sys-color-tertiary-container:#004f58;
-  --md-sys-color-on-tertiary-container:#a7eefb;
+  --md-sys-color-primary:#72daaf;
+  --md-sys-color-on-primary:#003826;
+  --md-sys-color-primary-container:#005138;
+  --md-sys-color-on-primary-container:#8ef7ca;
+  --md-sys-color-primary-fixed:#8ef7ca;
+  --md-sys-color-on-primary-fixed:#002115;
+  --md-sys-color-primary-fixed-dim:#72daaf;
+  --md-sys-color-secondary:#aecebe;
+  --md-sys-color-on-secondary:#1a362a;
+  --md-sys-color-secondary-container:#314c40;
+  --md-sys-color-on-secondary-container:#c9eada;
+  --md-sys-color-tertiary:#91cfe8;
+  --md-sys-color-on-tertiary:#003544;
+  --md-sys-color-tertiary-container:#004d61;
+  --md-sys-color-on-tertiary-container:#b8eaff;
   --md-sys-color-error:#ffb4ab;
   --md-sys-color-on-error:#690005;
   --md-sys-color-error-container:#93000a;
   --md-sys-color-on-error-container:#ffdad6;
-  --md-sys-color-background:#111411;
-  --md-sys-color-on-background:#e0e3df;
-  --md-sys-color-surface:#111411;
-  --md-sys-color-on-surface:#e0e3df;
-  --md-sys-color-surface-variant:#414941;
-  --md-sys-color-on-surface-variant:#c0c9c0;
-  --md-sys-color-surface-dim:#111411;
-  --md-sys-color-surface-container-lowest:#0b0f0b;
-  --md-sys-color-surface-container-low:#191c19;
-  --md-sys-color-surface-container:#1d201d;
-  --md-sys-color-surface-container-high:#282b28;
-  --md-sys-color-surface-container-highest:#323632;
-  --md-sys-color-outline:#8a938a;
-  --md-sys-color-outline-variant:#414941;
-  --md-sys-color-inverse-surface:#e0e3df;
-  --md-sys-color-inverse-on-surface:#2e312e;
-  --md-sys-color-inverse-primary:#276b34;
-  --md-sys-color-route:#92d798;
-  --md-sys-color-bus:#b4c5ff;
-  --md-sys-color-on-bus:#003063;
+  --md-sys-color-background:#101412;
+  --md-sys-color-on-background:#dee4e1;
+  --md-sys-color-surface:#101412;
+  --md-sys-color-on-surface:#dee4e1;
+  --md-sys-color-surface-variant:#3e4944;
+  --md-sys-color-on-surface-variant:#bccac3;
+  --md-sys-color-surface-dim:#101412;
+  --md-sys-color-surface-bright:#363a38;
+  --md-sys-color-surface-container-lowest:#090f0d;
+  --md-sys-color-surface-container-low:#181c1a;
+  --md-sys-color-surface-container:#1c201e;
+  --md-sys-color-surface-container-high:#272b29;
+  --md-sys-color-surface-container-highest:#313634;
+  --md-sys-color-outline:#87948d;
+  --md-sys-color-outline-variant:#3e4944;
+  --md-sys-color-inverse-surface:#dee4e1;
+  --md-sys-color-inverse-on-surface:#2d312f;
+  --md-sys-color-inverse-primary:#006c4c;
+  --md-sys-color-scrim:#000000;
+  --md-sys-color-shadow:#000000;
+  --md-sys-color-route:#22c55e;
+
+  /* 公交语义色（Trackr BusSemanticColors 的一套）*/
+  --bus:#14532d;
+  --on-bus:#86efac;
+  --bus-run:#22c55e;
+  --bus-arrive:#fbbf24;
+  --bus-pass:#64748b;
+  --track:#22c55e;
+  --track-off:#334155;
+  --stop-cond:#fb7185;
+  --stn-card:#1e2320;
 }
 }
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none !important}
 html,body{height:100%}
-body{background:var(--md-sys-color-surface-dim);color:var(--md-sys-color-on-surface);
+body{background:var(--md-sys-color-surface);color:var(--md-sys-color-on-surface);
   font:400 16px/24px var(--sans);-webkit-font-smoothing:antialiased}
-:focus-visible{outline:2px solid var(--md-sys-color-primary);outline-offset:2px;border-radius:var(--md-sys-shape-xs)}
+:focus-visible{outline:2px solid var(--md-sys-color-primary);outline-offset:2px;border-radius:var(--shape-xs)}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* 数字徽章：MD3 badge 的做法，底色用 primary，文字用 on-primary（对比度过线）*/
-.box{display:inline-block;min-width:20px;padding:0 6px;border-radius:var(--md-sys-shape-sm);
+.box{display:inline-block;min-width:22px;padding:0 7px;border-radius:var(--shape-sm);
   background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);
-  font:500 14px/20px var(--sans);letter-spacing:.1px;text-align:center;font-variant-numeric:tabular-nums}
+  font:600 14px/20px var(--sans);letter-spacing:.1px;text-align:center;font-variant-numeric:tabular-nums}
 
 .app{max-width:480px;margin:0 auto;min-height:100dvh;background:var(--md-sys-color-surface);
   display:flex;flex-direction:column}
 .view{flex:1;min-height:0;display:flex;flex-direction:column}
 
-/* ── 顶栏：MD3 小号 top app bar（64dp，标题左对齐，标题用 title-large）── */
-.top{position:sticky;top:0;z-index:5;flex:none;display:flex;align-items:center;
-  min-height:64px;padding:0 4px;background:var(--md-sys-color-surface)}
-.top h1{flex:1;min-width:0;padding:0 16px;text-align:left;
-  font:400 22px/28px var(--sans);letter-spacing:0;color:var(--md-sys-color-on-surface);
+/* ── 顶栏：M3E large app bar（标题大字重，右侧一颗数据源胶囊）── */
+.top{position:sticky;top:0;z-index:5;flex:none;display:flex;align-items:center;gap:4px;
+  min-height:64px;padding:8px 8px 4px 16px;background:var(--md-sys-color-surface)}
+.top .htxt{flex:1;min-width:0}
+.top h1{font:700 26px/32px var(--sans);letter-spacing:-.02em;color:var(--md-sys-color-on-surface);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top .sub{margin-top:2px;font:400 12px/16px var(--sans);letter-spacing:.3px;
+  color:var(--md-sys-color-on-surface-variant);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 数据源胶囊：Trackr 的城市胶囊位置，这里放「数据来自哪一面」 */
+.srcpill{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;
+  border-radius:var(--shape-full);background:var(--md-sys-color-surface-variant);
+  color:var(--md-sys-color-on-surface-variant);font:600 12px/16px var(--sans);letter-spacing:.3px}
+.srcpill i{width:7px;height:7px;border-radius:var(--shape-full);background:var(--md-sys-color-route)}
 /* 图标按钮 48dp + 状态层 */
 .top .side{width:48px;min-height:48px;flex:none;display:grid;place-items:center;
-  border-radius:var(--md-sys-shape-full);color:var(--md-sys-color-on-surface-variant)}
+  border-radius:var(--shape-full);color:var(--md-sys-color-on-surface-variant)}
 .top .side:empty{display:none}
-.top .side:hover{background:var(--md-sys-state-hover)}
-.top .side:active{background:var(--md-sys-state-press)}
+.top .side:hover{background:var(--state-hover)}
+.top .side:active{background:var(--state-press)}
 .top .side svg{width:24px;height:24px;fill:currentColor}
-/* 左栏品牌副标题与页脚（数据更新时间）只在桌面端出现，窄屏顶栏/底栏没位置 */
-#vList .top .sub,#vList .sig{display:none}
 
 /* ── 搜索：MD3 search bar（56dp、全圆角、surface-container-high）────── */
-.searchbox{position:relative;flex:none;margin:8px 16px 4px}
+.searchbox{position:relative;flex:none;margin:4px 16px 8px}
 .searchbox svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);
-  width:24px;height:24px;fill:var(--md-sys-color-on-surface-variant);pointer-events:none}
-.searchbox input{width:100%;height:56px;border:0;border-radius:var(--md-sys-shape-full);
+  width:22px;height:22px;fill:var(--md-sys-color-on-surface-variant);pointer-events:none}
+.searchbox input{width:100%;height:52px;border:0;border-radius:var(--shape-full);
   background:var(--md-sys-color-surface-container-high);color:var(--md-sys-color-on-surface);
-  padding:0 16px 0 52px;font:400 16px/24px var(--sans);letter-spacing:.5px}
+  padding:0 16px 0 50px;font:400 15px/24px var(--sans);letter-spacing:.4px}
 .searchbox input::placeholder{color:var(--md-sys-color-on-surface-variant)}
 .searchbox input:focus{outline:2px solid var(--md-sys-color-primary);outline-offset:1px}
 
-/* ── 线路列表：MD3 list（行高 56dp，分隔线 outline-variant）────────── */
-.listwrap{flex:1;min-height:0;overflow-y:auto;padding:4px 0 calc(16px + env(safe-area-inset-bottom))}
-.lines{list-style:none}
-.lines li{display:flex;align-items:center;gap:16px;min-height:56px;padding:8px 16px;
-  border-bottom:1px solid var(--md-sys-color-outline-variant);cursor:pointer}
-.lines li:hover{background:var(--md-sys-state-hover)}
-.lines li:active{background:var(--md-sys-state-press)}
-.lines li.on .to{color:var(--md-sys-color-primary);font-weight:500}
-.lines .badge{flex:none;min-width:56px;max-width:112px;height:32px;padding:0 12px;
-  border-radius:var(--md-sys-shape-sm);background:var(--md-sys-color-primary-container);
-  color:var(--md-sys-color-on-primary-container);font:500 14px/32px var(--sans);letter-spacing:.1px;
+/* ── 分区标题：小标签 + 计数 ───────────────────────────────────── */
+.sec{display:flex;align-items:baseline;gap:8px;padding:8px 16px 6px}
+.sec b{font:700 15px/22px var(--sans);letter-spacing:.1px}
+.sec span{font:400 12px/16px var(--sans);color:var(--md-sys-color-on-surface-variant)}
+
+/* ── 收藏卡：横向一排 ElevatedCard（Trackr FavoriteCard）────────── */
+.favrow{display:flex;gap:10px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none}
+.favrow::-webkit-scrollbar{display:none}
+.fcard{flex:none;width:200px;display:flex;flex-direction:column;gap:2px;
+  padding:14px;border-radius:var(--shape-xl);background:var(--md-sys-color-surface);
+  border:1px solid var(--md-sys-color-outline-variant);box-shadow:var(--elev-1);
+  text-align:left;cursor:pointer}
+.fcard:hover{box-shadow:var(--elev-2)}
+.fcard:active{background:var(--state-press)}
+.fcard .fl{display:flex;align-items:baseline;gap:8px}
+.fcard .fl b{flex:1;min-width:0;font:800 20px/26px var(--sans);letter-spacing:-.01em;
+  color:var(--md-sys-color-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .to{font:400 12px/16px var(--sans);color:var(--md-sys-color-on-surface-variant);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcard .fb{margin-top:8px;align-self:flex-start}
+
+/* ── 线路列表：卡片行（Trackr ElevatedCard 的列表形态）────────────── */
+.listwrap{flex:1;min-height:0;overflow-y:auto;padding:0 0 calc(96px + env(safe-area-inset-bottom))}
+.lines{list-style:none;display:flex;flex-direction:column;gap:8px;padding:0 16px}
+.lines li{display:flex;align-items:center;gap:12px;min-height:64px;padding:10px 14px;
+  border-radius:var(--shape-lg);background:var(--md-sys-color-surface);
+  border:1px solid var(--md-sys-color-outline-variant);box-shadow:var(--elev-1);cursor:pointer}
+.lines li:hover{box-shadow:var(--elev-2)}
+.lines li:active{background:var(--state-press)}
+.lines li.on{border-color:var(--md-sys-color-primary);
+  background:var(--md-sys-color-primary-container)}
+.lines li.on .to,.lines li.on .badge{color:var(--md-sys-color-on-primary-container)}
+.lines .badge{flex:none;min-width:48px;max-width:96px;height:28px;padding:0 10px;
+  border-radius:var(--shape-sm);background:var(--md-sys-color-secondary-container);
+  color:var(--md-sys-color-on-secondary-container);font:700 14px/28px var(--sans);letter-spacing:.1px;
   text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lines .to{flex:1;min-width:0;font:400 14px/20px var(--sans);letter-spacing:.25px;
-  color:var(--md-sys-color-on-surface-variant);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lines .star{flex:none;font-size:16px;color:var(--md-sys-color-tertiary)}
-.lines .tag{flex:none;padding:2px 8px;border-radius:var(--md-sys-shape-sm);
+.lines .to{flex:1;min-width:0;font:500 14px/20px var(--sans);letter-spacing:.2px;
+  color:var(--md-sys-color-on-surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lines .tag{flex:none;padding:2px 8px;border-radius:var(--shape-sm);
   background:var(--md-sys-color-error-container);color:var(--md-sys-color-on-error-container);
-  font:500 11px/16px var(--sans);letter-spacing:.5px}
+  font:600 11px/16px var(--sans);letter-spacing:.4px}
+/* 在途车数：没有车时灰掉，但不说「0 辆」也不算异常 */
+.cnt{flex:none;display:inline-flex;align-items:center;height:22px;padding:0 8px;
+  border-radius:var(--shape-full);background:var(--bus);color:var(--on-bus);
+  font:600 11px/16px var(--sans);letter-spacing:.3px;font-variant-numeric:tabular-nums}
+.cnt.zero{background:var(--md-sys-color-surface-container-highest);
+  color:var(--md-sys-color-on-surface-variant)}
 .lines li.off .badge{background:var(--md-sys-color-surface-container-highest);
   color:var(--md-sys-color-on-surface-variant)}
 .lines li.off .to{opacity:.7}
-.lines li.note{justify-content:center;border:0;cursor:default;
-  color:var(--md-sys-color-on-surface-variant);font:400 14px/20px var(--sans);letter-spacing:.25px;padding:24px 16px}
-.lines li.note:hover{background:none}
+.lines li.note{justify-content:center;border:0;box-shadow:none;background:none;cursor:default;
+  color:var(--md-sys-color-on-surface-variant);font:400 14px/20px var(--sans);padding:24px 16px}
+.lines li.note:hover{box-shadow:none}
 .lines li.note.bad{color:var(--md-sys-color-error)}
 
 /* ── 线路详情 ────────────────────────────────────────────────────── */
-.body{flex:1;min-height:0;overflow-y:auto}
-.lhead{padding:8px 16px 0}
-.dirs2{display:flex;align-items:center;gap:8px;font:400 22px/28px var(--sans);letter-spacing:0}
+.body{flex:1;min-height:0;overflow-y:auto;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+/* 头部卡：方向大字 + 芯片行 + 提醒条 */
+.hcard{margin:4px 16px 0;padding:16px;border-radius:var(--shape-xl);
+  background:var(--md-sys-color-surface-container-low)}
+.dirs2{display:flex;align-items:center;gap:8px;font:700 24px/30px var(--sans);letter-spacing:-.01em}
 .dirs2 span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dirs2 svg{flex:none;width:24px;height:24px;fill:var(--md-sys-color-primary)}
+.dirs2 svg{flex:none;width:20px;height:20px;fill:var(--md-sys-color-primary)}
 /* 芯片：MD3 chip（32dp 高、8dp 圆角、label-large）*/
 .tags{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
-.tg{display:inline-flex;align-items:center;height:32px;padding:0 12px;
-  border:1px solid var(--md-sys-color-outline-variant);border-radius:var(--md-sys-shape-sm);
+.tg{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 11px;
+  border:1px solid var(--md-sys-color-outline-variant);border-radius:var(--shape-sm);
   background:transparent;color:var(--md-sys-color-on-surface-variant);
-  font:500 14px/20px var(--sans);letter-spacing:.1px}
-.tg.f{background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);border-color:transparent}
-.tg.l{background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);border-color:transparent}
-.tg.idle{background:var(--md-sys-color-surface-container-highest);color:var(--md-sys-color-on-surface-variant);border-color:transparent}
-.tg.off{background:var(--md-sys-color-error-container);color:var(--md-sys-color-on-error-container);border-color:transparent}
-.tg.act{cursor:pointer}
-.tg.act:hover{background:var(--md-sys-state-hover)}
-.count{margin-top:12px;font:400 16px/24px var(--sans);letter-spacing:.5px}
-/* 方向级运行提醒（如「某几班只到某站」）：没内容时不占位 */
-.lhead .dnote{margin-top:8px;font:500 14px/20px var(--sans);letter-spacing:.2px;
-  color:var(--md-sys-color-tertiary)}
-.lhead .dnote:empty{display:none}
+  font:500 13px/18px var(--sans);letter-spacing:.1px;white-space:nowrap}
+.tg.f{background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);
+  border-color:transparent;font-weight:600}
+.tg.l{background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);
+  border-color:transparent;font-weight:600}
+.tg.idle{background:var(--md-sys-color-surface-container-highest);color:var(--md-sys-color-on-surface-variant);
+  border-color:transparent}
+.tg.off{background:var(--md-sys-color-error-container);color:var(--md-sys-color-on-error-container);
+  border-color:transparent;font-weight:600}
+.tg.act{cursor:pointer;border-color:var(--md-sys-color-primary);color:var(--md-sys-color-primary)}
+.tg.act:hover{background:color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)}
+.count{margin-top:10px;font:500 14px/20px var(--sans);letter-spacing:.2px;
+  color:var(--md-sys-color-on-surface-variant);display:flex;align-items:center;gap:6px}
+.count b.box{font-size:13px;line-height:18px;min-width:20px}
+/* 方向级运行提醒（如「某几班只到某站」）：左侧粗边 + 柔和底，没内容时不占位 */
+.dnote{margin-top:12px;padding:10px 12px;border-radius:var(--shape-md);
+  border-left:4px solid var(--bus-arrive);background:color-mix(in srgb, var(--bus-arrive) 12%, transparent);
+  font:500 13px/19px var(--sans);letter-spacing:.2px;color:var(--md-sys-color-on-surface)}
+.dnote:empty{display:none}
 
-/* 站点卡：MD3 filled card（surface-container-highest，12dp 圆角，16dp 内边距）*/
-.scard{margin:16px;padding:16px;border-radius:var(--md-sys-shape-md);
-  background:var(--md-sys-color-surface-container-highest);text-align:center}
-.scard .sn{display:flex;align-items:center;justify-content:center;gap:8px;
-  font:500 16px/24px var(--sans);letter-spacing:.15px}
-.scard .hint{margin-top:12px;font:400 16px/24px var(--sans);letter-spacing:.5px}
-.scard .hint.mute{color:var(--md-sys-color-on-surface-variant);font-size:14px;line-height:20px}
-.scard .sub{margin-top:8px;font:400 12px/16px var(--sans);letter-spacing:.4px;
-  color:var(--md-sys-color-on-surface-variant)}
-/* 条件启用站的说明（跟站名贴在一起，在提示语上面） */
-.scard .sub.note{color:var(--md-sys-color-tertiary);font-weight:500;letter-spacing:.2px}
+/* 走向条小节：Trackr「线路全景走向」那行 + 一块柔和底 */
+.railhead{display:flex;align-items:center;gap:8px;margin:16px 16px 0}
+.railhead b{font:700 15px/22px var(--sans)}
+.railhead span{margin-left:auto;font:400 12px/16px var(--sans);color:var(--md-sys-color-on-surface-variant)}
+.railsurf{margin:8px 12px 0;padding:0 4px;border-radius:var(--shape-lg);
+  background:color-mix(in srgb, var(--md-sys-color-surface-variant) 45%, transparent)}
 
-/* 车辆跟踪：点走向条上的车进这里，替掉站点卡 */
-.scard.follow{text-align:left}
-.scard.follow .back2{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 10px 0 4px;
-  margin:-4px 0 8px;border-radius:var(--md-sys-shape-full);color:var(--md-sys-color-primary);
-  font:500 14px/20px var(--sans);letter-spacing:.1px}
-.scard.follow .back2:hover{background:var(--md-sys-state-hover)}
-.scard.follow .back2 svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;
-  stroke-linecap:round;stroke-linejoin:round}
-.scard.follow .h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.scard.follow .h b{font:500 16px/24px var(--sans);letter-spacing:.15px}
-.scard.follow .h span{margin-left:auto;font:400 12px/16px var(--sans);letter-spacing:.4px;
-  color:var(--md-sys-color-on-surface-variant)}
-.scard.follow .sub{margin-bottom:8px}
-/* 跟踪页的站表：长线 40+ 站全列出来，靠它自己滚，渲染后把 NEXT 滚进视野 */
-.jrn{display:flex;flex-direction:column;max-height:42vh;overflow-y:auto}
-.jrow{display:flex;align-items:center;gap:12px;min-height:40px;
-  font:400 14px/20px var(--sans);letter-spacing:.25px}
-.jdot{flex:none;width:10px;height:10px;border-radius:var(--md-sys-shape-full);box-sizing:border-box;
-  border:2px solid var(--md-sys-color-outline);background:transparent}
-.jnm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  color:var(--md-sys-color-on-surface-variant)}
-.jrow .at{flex:none;font:500 12px/16px var(--sans);letter-spacing:.5px;
-  color:var(--md-sys-color-on-surface-variant)}
-.jrow.pass .jdot{background:var(--md-sys-color-outline);opacity:.5}
-.jrow.pass .jnm{color:var(--md-sys-color-outline)}
-.jrow.next .jdot{border-color:var(--md-sys-color-primary);background:var(--md-sys-color-primary)}
-.jrow.next .jnm,.jrow.next .at{color:var(--md-sys-color-primary);font-weight:500}
-
-/* 卡片下面两个动作：MD3 outlined button（40dp、全圆角、primary 文字、18dp 图标）*/
-.cardbtns{display:flex;gap:8px;margin:12px 16px 0}
-.cardbtns button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  height:40px;padding:0 12px;border:1px solid var(--md-sys-color-outline);
-  border-radius:var(--md-sys-shape-full);background:transparent;
-  color:var(--md-sys-color-primary);font:500 14px/20px var(--sans);letter-spacing:.1px}
-.cardbtns svg{flex:none;width:18px;height:18px;fill:currentColor}
-.cardbtns button:hover{background:color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)}
-.cardbtns button:active{background:color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent)}
-.cardbtns button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
-  border-color:color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent)}
-
-/* 车辆列表卡：一条一辆车，点进去看它的行程（跟点走向条上的车同一件事）*/
-.scard .vrow{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:6px 0;
-  text-align:left;border-bottom:1px solid var(--md-sys-color-outline-variant)}
-.scard .vrow:last-of-type{border-bottom:0}
-.scard .vrow:hover{background:var(--md-sys-state-hover)}
-.scard .vrow>svg{flex:none;width:24px;height:24px;fill:var(--md-sys-color-bus)}
-.scard .vtxt{flex:1;min-width:0}
-.scard .vh{display:flex;align-items:baseline;gap:8px;font:500 16px/24px var(--sans);letter-spacing:.15px}
-.scard .vh .eta{margin-left:auto;font:500 12px/16px var(--sans);letter-spacing:.5px;color:var(--md-sys-color-primary)}
-.scard .vs{margin-top:2px;font:400 12px/16px var(--sans);letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)}
-.scard .vrow.pass>svg,.scard .vrow.pass .vh b,.scard .vrow.pass .eta{opacity:.45}
-
-/* ── 走向条（MD3 没有这个组件，自绘；轴线用品牌色角色 route）──────── */
-.railwrap{margin-top:20px;overflow-x:auto;padding:0 16px 4px;scrollbar-width:thin}
+/* ── 走向条（MD3 没有这个组件，自绘；已行经的轴线用 track，未行经用 track-off）── */
+.railwrap{margin-top:0;overflow-x:auto;padding:0 12px 6px;scrollbar-width:thin}
 /* width:max-content（不是 min-width）—— display:flex 是块级盒，只给 min-width 它照样铺满
    .railwrap，::before 的轴线就跟着伸到末站之外老远，站少的线路右半边空一截。 */
 /* min-width:100% + space-between：站少的线路（6 站那种）格子照 46px 排，多出来的宽度摊进
@@ -274,144 +289,249 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
    格宽没变，所以车辆那套按 --cw 换算的段内插值不受影响。 */
 .rail{position:relative;display:flex;align-items:flex-start;width:max-content;padding-top:26px}
 .rail:not(:empty){min-width:100%;justify-content:space-between}
-.rail::before{content:'';position:absolute;left:0;right:0;top:35px;height:8px;
-  border-radius:var(--md-sys-shape-full);background:var(--md-sys-color-route)}
+/* --prog 是最近一辆车在整条轴上的位置（0–100%），由 renderRail 量出来；
+   没有在途车就整条灰掉 —— 跟「今天这条线没车」是同一件事。 */
+.rail::before{content:'';position:absolute;left:0;right:0;top:35px;height:6px;
+  border-radius:var(--shape-full);
+  background:linear-gradient(90deg,var(--track) 0 var(--prog,0%),var(--track-off) var(--prog,0%) 100%)}
 .stn{position:relative;flex:0 0 var(--cw);width:var(--cw);display:flex;flex-direction:column;
   align-items:center;cursor:pointer}
-.stn .bx{position:relative;z-index:1;width:26px;height:26px;border-radius:var(--md-sys-shape-sm);
-  background:var(--md-sys-color-primary)}
+.stn .bx{position:relative;z-index:1;width:22px;height:22px;margin-top:2px;border-radius:var(--shape-sm);
+  background:var(--md-sys-color-primary);box-shadow:0 0 0 3px var(--md-sys-color-surface)}
 /* 竖排站名：不用 writing-mode:vertical-rl —— 实测无头 Chromium 缺竖排字体度量，
    字会挤成一团（高 0）。逐字换行到处都对：宽 1 字 + break-all。 */
 .stn .nm{margin-top:8px;width:1.15em;font:500 12px/1.3 var(--sans);letter-spacing:.5px;
   color:var(--md-sys-color-on-surface-variant);word-break:break-all;text-align:center}
 .stn:hover .nm{color:var(--md-sys-color-on-surface)}
-.stn.on .bx{box-shadow:0 0 0 3px var(--md-sys-color-primary-container)}
+.stn.on .bx{background:var(--md-sys-color-primary);box-shadow:0 0 0 3px var(--md-sys-color-surface),0 0 0 6px var(--md-sys-color-primary-container)}
 .stn.on .nm{color:var(--md-sys-color-primary);font-weight:700}
-/* 条件启用站（只在上学、放学时段停）：实心块改成空心环 —— 26px 下跟实心块一眼分得清 */
-.stn.cond .bx{background:var(--md-sys-color-surface);box-shadow:inset 0 0 0 3px var(--md-sys-color-primary)}
+/* 条件启用站（只在上学、放学时段停）：实心块改成红环 —— 语义色跟 Trackr 一致 */
+.stn.cond .bx{background:var(--md-sys-color-surface);
+  box-shadow:0 0 0 3px var(--md-sys-color-surface),inset 0 0 0 3px var(--stop-cond)}
 /* 车辆：段内插值。--p 是站间比例（1 = 正在接近的那站），left 按格宽折成像素。
    z-index:2 —— 站块是 1，车永远压在站块之上；车是挂在自己那一格里的，
    横向左/右溢出相邻格时仍然盖住它们的站块。
-   高 26px 跟站块（.bx）等高：车停在那站时正好整块盖住站块，不漏出一圈绿边。 */
-.stn .bus{position:absolute;top:0;left:calc(50% + (var(--p) - 1) * var(--cw));
-  transform:translateX(-50%);z-index:2;display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;
-  border-radius:var(--md-sys-shape-sm);background:var(--md-sys-color-bus);
-  color:var(--md-sys-color-on-bus);font:500 12px/26px var(--sans);letter-spacing:.5px;
-  white-space:nowrap;box-shadow:var(--md-sys-elevation-1)}
+   高 22px 跟站块（.bx）对齐：车停在那站时正好整块盖住站块，不漏出一圈绿边。 */
+.stn .bus{position:absolute;top:2px;left:calc(50% + (var(--p) - 1) * var(--cw));
+  transform:translateX(-50%);z-index:2;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;
+  border-radius:var(--shape-sm);background:var(--bus);color:var(--on-bus);
+  font:700 12px/22px var(--sans);letter-spacing:.4px;
+  white-space:nowrap;box-shadow:var(--elev-1),0 0 0 2px var(--md-sys-color-surface)}
 .stn .bus svg{width:12px;height:12px;fill:currentColor}
-/* 选中的那辆还是蓝的，只加一圈描边 + 一层高度（原来换 tertiary 的青，现在蓝的
-   已经够醒目，换色反而认不出是同一辆车） */
-.stn .bus.on{box-shadow:var(--md-sys-elevation-2),0 0 0 2px var(--md-sys-color-surface),0 0 0 4px var(--md-sys-color-bus)}
-.upd{padding:8px 16px calc(16px + env(safe-area-inset-bottom));
-  font:400 12px/16px var(--sans);letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)}
+/* 选中的那辆：加一圈描边 + 一层高度（颜色不变，别让同一辆车认不出来） */
+.stn .bus.on{box-shadow:var(--elev-2),0 0 0 2px var(--md-sys-color-surface),0 0 0 4px var(--md-sys-color-primary)}
+
+/* ── 到站卡（Trackr StationArrivalContent）────────────────────────── */
+.scard{margin:16px;padding:16px;border-radius:var(--shape-xl);
+  background:var(--stn-card);text-align:left}
+.scard .row1{display:flex;align-items:flex-start;gap:8px}
+.scard .sn{flex:1;min-width:0;font:800 21px/28px var(--sans);letter-spacing:-.01em}
+.scard .ord{flex:none;height:22px;padding:0 8px;border-radius:var(--shape-sm);
+  background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);
+  font:700 12px/22px var(--sans);letter-spacing:.2px;font-variant-numeric:tabular-nums}
+/* 大数字：还有 N 个站 —— M3E 那套 ExtraBold 数字，橙色 */
+.scard .hint{margin-top:10px;font:500 16px/24px var(--sans);letter-spacing:.2px}
+.scard .hint .big{font:800 34px/38px var(--sans);letter-spacing:-.02em;color:var(--bus-arrive);
+  font-variant-numeric:tabular-nums;padding:0 2px}
+.scard .hint.arrive{font:800 26px/32px var(--sans);color:var(--bus-arrive)}
+.scard .hint.arrive.at{color:var(--bus-run)}
+.scard .hint.mute{color:var(--md-sys-color-on-surface-variant);font-weight:500;font-size:15px}
+.scard .sub{margin-top:8px;font:400 13px/19px var(--sans);letter-spacing:.2px;
+  color:var(--md-sys-color-on-surface-variant)}
+/* 条件启用站的说明（红色小胶囊，跟站名贴在一起） */
+.scard .sub.note{display:inline-block;margin-top:10px;padding:3px 8px;border-radius:var(--shape-sm);
+  background:color-mix(in srgb, var(--stop-cond) 14%, transparent);color:var(--stop-cond);
+  font:600 12px/18px var(--sans)}
+/* 该站的下一辆车：车牌 + 倒计时，做成一行淡底 */
+.scard .eta{margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;
+  border-radius:var(--shape-md);background:var(--md-sys-color-surface-container-lowest)}
+.scard .eta svg{flex:none;width:18px;height:18px;fill:var(--bus-run)}
+.scard .eta b{font:700 14px/20px var(--sans);letter-spacing:.1px}
+.scard .eta span{margin-left:auto;font:700 13px/18px var(--sans);color:var(--bus-run);
+  font-variant-numeric:tabular-nums}
+
+/* 车辆跟踪：点走向条上的车进这里，替掉站点卡 */
+.scard .back2{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 10px 0 4px;
+  margin:-4px 0 8px;border-radius:var(--shape-full);color:var(--md-sys-color-primary);
+  font:600 13px/18px var(--sans)}
+.scard .back2:hover{background:var(--state-hover)}
+.scard .back2 svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.scard .h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.scard .h b{font:800 19px/26px var(--sans);letter-spacing:-.01em}
+.scard .h span{margin-left:auto;font:400 12px/16px var(--sans);letter-spacing:.4px;
+  color:var(--md-sys-color-on-surface-variant)}
+/* 跟踪页的站表：长线 40+ 站全列出来，靠它自己滚，渲染后把 NEXT 滚进视野。
+   站点之间连一条灰轴（已过站那段改成 muted），跟走向条是同一套语义。 */
+.jrn{position:relative;display:flex;flex-direction:column;max-height:42vh;overflow-y:auto;
+  margin-top:12px;padding-left:4px}
+.jrn::before{content:'';position:absolute;left:9px;top:16px;bottom:16px;width:3px;
+  border-radius:var(--shape-full);background:var(--track-off)}
+.jrow{position:relative;display:flex;align-items:center;gap:12px;min-height:40px;padding-left:20px;
+  font:400 14px/20px var(--sans);letter-spacing:.25px}
+.jdot{position:absolute;left:0;width:11px;height:11px;border-radius:var(--shape-full);box-sizing:border-box;
+  border:2px solid var(--md-sys-color-outline);background:var(--md-sys-color-surface-container-lowest)}
+.jnm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--md-sys-color-on-surface-variant)}
+.jrow .at{flex:none;font:600 12px/16px var(--sans);letter-spacing:.4px;
+  color:var(--md-sys-color-on-surface-variant)}
+.jrow.pass .jdot{background:var(--bus-pass);border-color:var(--bus-pass)}
+.jrow.pass .jnm,.jrow.pass .at{color:var(--bus-pass);font-weight:400}
+.jrow.next .jdot{border-color:var(--bus-run);background:var(--bus-run);box-shadow:0 0 0 3px var(--bus)}
+.jrow.next .jnm,.jrow.next .at{color:var(--bus-run);font-weight:700}
+
+/* 到站卡下两个动作：FilledTonal / Outlined button（40dp、全圆角）*/
+.cardbtns{display:flex;gap:8px;margin:0 16px}
+.cardbtns button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:44px;padding:0 12px;border:1px solid var(--md-sys-color-outline);
+  border-radius:var(--shape-full);background:transparent;
+  color:var(--md-sys-color-primary);font:600 14px/20px var(--sans)}
+.cardbtns button.tonal{background:var(--md-sys-color-secondary-container);
+  color:var(--md-sys-color-on-secondary-container);border-color:transparent}
+.cardbtns svg{flex:none;width:18px;height:18px;fill:currentColor}
+.cardbtns button:hover{background:color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)}
+.cardbtns button.tonal:hover{background:color-mix(in srgb, var(--md-sys-color-on-secondary-container) 12%, var(--md-sys-color-secondary-container))}
+.cardbtns button:active{background:color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent)}
+.cardbtns button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  border-color:color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent)}
+
+/* 车辆列表卡：一条一辆车，点进去看它的行程（跟点走向条上的车同一件事）*/
+.scard .vrow{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 0;
+  text-align:left;border-bottom:1px solid var(--md-sys-color-outline-variant)}
+.scard .vrow:last-of-type{border-bottom:0}
+.scard .vrow:hover{background:var(--state-hover)}
+/* 车图标的底：Trackr 的 busChipContainer，蓝改成绿，一眼分清「站点」和「车」 */
+.scard .vico{flex:none;display:grid;place-items:center;width:36px;height:36px;
+  border-radius:var(--shape-full);background:var(--bus)}
+.scard .vico svg{width:20px;height:20px;fill:var(--on-bus)}
+.scard .vtxt{flex:1;min-width:0}
+.scard .vh{display:flex;align-items:baseline;gap:8px;font:700 16px/24px var(--sans);letter-spacing:.1px}
+.scard .vh .eta{margin-left:auto;font:800 15px/20px var(--sans);letter-spacing:0;
+  color:var(--bus-run);font-variant-numeric:tabular-nums}
+.scard .vh .eta.warn{color:var(--bus-arrive)}
+.scard .vs{margin-top:2px;font:400 12px/16px var(--sans);letter-spacing:.3px;color:var(--md-sys-color-on-surface-variant)}
+.scard .vrow.pass .vico,.scard .vrow.pass .vh b,.scard .vrow.pass .eta{opacity:.45}
+
+.upd{padding:12px 16px calc(8px + env(safe-area-inset-bottom));
+  font:400 12px/16px var(--sans);letter-spacing:.3px;color:var(--md-sys-color-on-surface-variant)}
 .upd.bad{color:var(--md-sys-color-error);font-weight:500}
 
-/* ── 底栏：MD3 navigation bar（80dp、活动指示器 64×32 药丸）────────
-   这三个是动作不是目的地，用 navigation bar 的样子摆 icon 按钮，MD3 里
-   bottom app bar 也长这样；做成 nav bar 只是省一套样式。 */
-.bottom{flex:none;display:flex;height:80px;padding:12px 8px;
-  padding-bottom:calc(16px + env(safe-area-inset-bottom));
-  background:var(--md-sys-color-surface-container)}
-.bottom button{position:relative;flex:1;min-width:0;padding-top:4px;
-  display:flex;flex-direction:column;align-items:center;gap:4px;
-  font:500 12px/16px var(--sans);letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)}
-.bottom button::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:64px;height:32px;border-radius:var(--md-sys-shape-full);background:transparent}
-.bottom button:hover::before{background:var(--md-sys-state-hover)}
-.bottom button:active::before{background:var(--md-sys-state-press)}
-.bottom svg{position:relative;width:24px;height:24px;fill:currentColor}
-.bottom .fav.on{color:var(--md-sys-color-on-secondary-container)}
-.bottom .fav.on::before{background:var(--md-sys-color-secondary-container)}
+/* 列表页脚：数据更新时间 + 状态点（桌面端还兼左栏脚） */
+.sig{display:flex;flex:none;align-items:center;gap:8px;padding:10px 20px;
+  font:400 12px/16px var(--sans);letter-spacing:.3px;color:var(--md-sys-color-on-surface-variant)}
+.sig .pulse{flex:none;width:7px;height:7px;border-radius:var(--shape-full);background:var(--md-sys-color-route)}
+.sig span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── 底栏：M3E 悬浮胶囊工具栏（56dp、surfaceContainerHighest、阴影 + 细边）──
+   窄屏浮在内容上、居中；桌面端挪进右栏顶栏（见 @media 那段）。 */
+.bottom{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:4px;
+  padding:6px;border-radius:var(--shape-2xl);
+  background:var(--md-sys-color-surface-container-highest);
+  border:1px solid color-mix(in srgb, var(--md-sys-color-outline-variant) 60%, transparent);
+  box-shadow:var(--elev-3)}
+.bottom button{position:relative;display:grid;place-items:center;width:52px;height:48px;
+  border-radius:var(--shape-full);color:var(--md-sys-color-on-surface-variant)}
+.bottom button:hover{background:var(--state-hover)}
+.bottom button:active{background:var(--state-press)}
+.bottom svg{width:24px;height:24px;fill:currentColor}
+.bottom .fav.on{color:var(--md-sys-color-primary)}
+.bottom .fav.on::after{content:'';position:absolute;bottom:5px;width:5px;height:5px;
+  border-radius:var(--shape-full);background:var(--md-sys-color-primary)}
 .bottom button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent)}
 
 /* ── 桌面端（≥900px，MD3 Expanded）：左栏线路常驻 + 右栏详情 ──────────
    窄屏是「列表 ↔ 详情」两页互斥；这里 .app 换成两列栅格，左栏当导航、
    #vDetail 常驻，两个 hidden 都放开。改动全收在这块里，窄屏一行不动。 */
 @media (min-width:900px){
-  :root{--ch:44px}   /* 桌面端走向条的行高（竖排一站一行），竖轴上下的收口按它算 */
+  :root{--ch:46px}   /* 桌面端走向条的行高（竖排一站一行），竖轴上下的收口按它算 */
   .app{max-width:none;height:100dvh;overflow:hidden;
-    display:grid;grid-template-columns:284px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+    display:grid;grid-template-columns:320px minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
   #vList[hidden],#vDetail[hidden]{display:flex !important}
   #vList{min-height:0;border-right:1px solid var(--md-sys-color-outline-variant)}
   #vDetail{min-height:0;min-width:0}
 
-  /* 左栏：品牌区两行、搜索框压矮、列表行改成圆角（MD3 navigation drawer） */
-  #vList .top{min-height:auto;flex-direction:column;align-items:flex-start;padding:18px 20px 10px}
-  #vList .top h1{padding:0;font:650 16px/24px var(--sans);letter-spacing:-.01em}
-  #vList .top .sub{display:block;margin-top:3px;font:400 12px/16px var(--sans);
-    color:var(--md-sys-color-on-surface-variant)}
-  .searchbox{margin:2px 12px 6px}
+  /* 左栏：品牌区两行、搜索框压矮、列表行改用低饱和底（navigation drawer 的形态） */
+  #vList .top{min-height:auto;padding:20px 20px 8px;gap:10px}
+  #vList .top h1{font-size:20px;line-height:26px}
+  #vList .top .sub{margin-top:2px}
+  .searchbox{margin:2px 16px 8px}
   .searchbox input{height:44px;padding-left:44px;font-size:14px}
   .searchbox svg{left:14px;width:20px;height:20px}
-  .listwrap{padding:4px 8px 12px}
-  .lines li{min-height:48px;gap:12px;padding:6px 10px;border-bottom:0;
-    border-radius:var(--md-sys-shape-sm)}
+  .sec{padding:10px 20px 6px}
+  .favrow{padding:0 16px 8px}
+  .fcard{width:210px}
+  .listwrap{padding:0 0 16px}
+  .lines{gap:2px;padding:0 8px}
+  .lines li{min-height:48px;padding:6px 10px;border:0;box-shadow:none;border-radius:var(--shape-md);
+    background:none}
+  .lines li:hover{background:var(--state-hover);box-shadow:none}
   .lines li.on{background:var(--md-sys-color-secondary-container)}
   .lines li.on .to{color:var(--md-sys-color-on-secondary-container)}
-  .lines .badge{min-width:44px;height:28px;padding:0 10px;font-size:13px;line-height:28px}
-  .lines .to{font-size:13px}
+  .lines .badge{min-width:40px;height:26px;font-size:13px;line-height:26px;padding:0 8px}
   .lines li.note{padding:24px 10px}
   /* 左栏脚：数据更新时间 + 状态点（对应 ylzy 面板的 .sig） */
-  #vList .sig{display:flex;flex:none;align-items:center;gap:8px;padding:12px 20px;
-    border-top:1px solid var(--md-sys-color-outline-variant);
-    font:400 12px/16px var(--sans);color:var(--md-sys-color-on-surface-variant)}
-  .sig .pulse{flex:none;width:7px;height:7px;border-radius:var(--md-sys-shape-full);
-    background:var(--md-sys-color-primary)}
-  .sig span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #vList .sig{padding:12px 20px;border-top:1px solid var(--md-sys-color-outline-variant)}
 
-  /* 右栏顶栏：线路名 + 三个动作（窄屏的底栏挪上来），返回键不需要了 */
+  /* 右栏顶栏：线路名 + 三个动作（窄屏的浮动胶囊挪上来），返回键不需要了 */
   #vDetail .top{padding:0 24px;border-bottom:1px solid var(--md-sys-color-outline-variant)}
   #btnBack{display:none}
-  #vDetail .top h1{font-size:18px}
-  .top .acts{flex:none;display:flex;gap:8px}
-  .top .acts button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;
-    border:1px solid var(--md-sys-color-outline);border-radius:var(--md-sys-shape-full);
-    color:var(--md-sys-color-primary);font:500 14px/20px var(--sans);letter-spacing:.1px}
-  .top .acts button:hover{background:color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)}
-  .top .acts svg{width:18px;height:18px;fill:currentColor}
-  .top .acts button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
-    border-color:color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent)}
-  .top .acts .fav.on{background:var(--md-sys-color-secondary-container);
-    color:var(--md-sys-color-on-secondary-container);border-color:transparent}
+  #vDetail .top h1{font-size:20px;line-height:28px}
+  #vDetail .top .sub{display:none}
+  .top .acts{flex:none;display:flex;align-items:center;gap:4px;padding:4px;
+    border-radius:var(--shape-2xl);background:var(--md-sys-color-surface-container-high)}
+  .top .acts button{display:grid;place-items:center;width:44px;height:40px;
+    border-radius:var(--shape-full);color:var(--md-sys-color-on-surface-variant)}
+  .top .acts button:hover{background:var(--state-hover)}
+  .top .acts svg{width:20px;height:20px;fill:currentColor}
+  .top .acts button[disabled]{color:color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent)}
+  .top .acts .fav.on{background:var(--md-sys-color-primary-container);
+    color:var(--md-sys-color-on-primary-container)}
 
-  /* 内容区：窄屏是「卡片在上、走向条在下」一路往下排，桌面端这块要重新分 ——
-     走向条转竖排占左栏、自己滚，站点卡/车辆列表/跟踪页归右栏，高度铺满视口。 */
+  /* 内容区：窄屏是「头卡 → 到站卡 → 走向条」一路往下排，桌面端这块重新分 ——
+     走向条转竖排占左栏、自己滚，到站卡/车辆列表/跟踪页归右栏，高度铺满视口。 */
   .body{padding:0 24px 24px;overflow:hidden;
-    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);
-    grid-template-rows:auto auto minmax(0,1fr) auto;column-gap:24px}
-  .lhead{grid-area:1/1/2/3;padding:20px 0 0}
-  .dirs2{font-size:26px;line-height:32px}
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);
+    grid-template-rows:auto auto auto minmax(0,1fr);
+    column-gap:24px;align-content:start}
+  .hcard{grid-area:1/1/2/3;margin:20px 0 0;background:transparent;padding:0}
+  .dirs2{font-size:27px;line-height:34px}
+  .count{margin-top:10px}
+  .railhead{grid-area:2/1/3/2;margin:18px 0 0}
+  .railsurf{grid-area:3/1/5/2;margin:6px 0 0;display:flex;min-height:0;max-width:920px}
   /* 走向条：竖排一站一行（横排 30 站要横滚 292px、站名竖着写 9 行——桌面端不划算）。
-     灰卡占满左栏高度，站多就卡内竖滚。 */
-  /* 上下只留 4px：站少的线也要能整条放下不滚；超宽屏别把这栏拉成一条长条 */
-  .railwrap{grid-area:2/1/4/2;margin:20px 0 0;min-height:0;overflow-y:auto;overflow-x:hidden;
-    padding:4px 16px;max-width:920px;background:var(--md-sys-color-surface-container-low);
-    border-radius:var(--md-sys-shape-lg)}
+     站多就在这块柔和底里竖滚。 */
+  .railwrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+    padding:8px 16px;scrollbar-width:thin}
   .rail{margin:0;padding:0;min-width:0;width:auto;flex-direction:column;align-items:stretch}
   /* 收回 justify-content 必须用上面那条一样的选择器：.rail:not(:empty) 特异性 (0,2,0)
      比 .rail (0,1,0) 高，写成 .rail 根本压不住，桌面端竖排会被纵向摊开 */
   .rail:not(:empty){justify-content:flex-start}
-  /* 竖轴：从首个站块中心画到末个站块中心（行高固定 --ch，所以上下各让半行） */
-  .rail::before{left:21px;right:auto;top:calc(var(--ch) / 2);bottom:calc(var(--ch) / 2);
-    width:8px;height:auto}
+  /* 竖轴：从首个站块中心画到末个站块中心（行高固定 --ch，所以上下各让半行）*/
+  .rail::before{left:23px;right:auto;top:calc(var(--ch) / 2);bottom:calc(var(--ch) / 2);
+    width:6px;height:auto;
+    background:linear-gradient(180deg,var(--track) 0 var(--prog,0%),var(--track-off) var(--prog,0%) 100%)}
   .stn{flex:0 0 var(--ch);width:auto;height:var(--ch);flex-direction:row;align-items:center;
-    gap:12px;padding:0 76px 0 8px;border-radius:var(--md-sys-shape-sm)}   /* 右侧留出车 chip 那条道 */
-  .stn:hover{background:var(--md-sys-state-hover)}
-  .stn .bx{flex:none;width:20px;height:20px;margin-left:7px}   /* 中心落在 x=25，与竖轴对齐 */
+    gap:12px;padding:0 84px 0 8px;border-radius:var(--shape-md)}   /* 右侧留出车 chip 那条道 */
+  .stn:hover{background:var(--state-hover)}
+  .stn .bx{flex:none;width:18px;height:18px;margin:0 0 0 8px}   /* 中心落在 x=26，与竖轴对齐 */
   .stn .nm{min-width:0;margin:0;width:auto;font-size:14px;line-height:20px;text-align:left;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* 车 chip：横排那套「段内插值」搬到竖轴 —— p=1 压在它正在接近的那站上，p→0 退到上一站之间 */
   .stn .bus{top:calc(var(--ch) / 2 + (var(--p) - 1) * var(--ch));left:auto;right:12px;
     transform:translateY(-50%)}
-  /* 首站上面没有上一格，退到站间就被灰卡裁掉 —— 钉在首站上 */
+  /* 首站上面没有上一格，退到站间就被柔和底裁掉 —— 钉在首站上 */
   .stn:first-child .bus{top:calc(var(--ch) / 2)}
   /* 桌面端不摆这两个按钮：车辆列表点站就直接出（见 renderStation），
      「反方向站点」= 顶栏「换向」。窄屏两个都还在。 */
   .cardbtns{display:none}
-  .scard{grid-area:2/2/4/3;margin:20px 0 0;text-align:left;max-width:none;align-self:start}
-  .scard .sn{justify-content:flex-start}
-  .scard .h{margin-top:16px}   /* 卡片下面接着「全部车辆」那行 */
-  .upd{grid-area:4/1/5/3;padding:16px 0 0}
+  /* 右栏铺满、自己滚：车多（20 辆）时不至于被 .body 的 overflow:hidden 裁掉 */
+  .scard{grid-area:2/2/5/3;margin:18px 0 0;max-width:none;align-self:stretch;overflow-y:auto}
+  .scard .h{margin-top:14px}   /* 卡片下面接着「全部车辆」那行 */
+  .upd{grid-area:5/1/6/3;padding:16px 0 0}
+  /* 浮动胶囊在桌面端不悬浮：动作已挪进顶栏，这里整块收掉 */
+  .bottom{display:none}
+  .body{padding-bottom:24px}
 }
 </style>
 </head>
@@ -420,13 +540,25 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
   <!-- 线路列表 -->
   <section class="view" id="vList">
-    <div class="top"><span class="side"></span><h1>玉林实时公交</h1><span class="side"></span>
-      <div class="sub">实时到站 · 数据来自车来了、掌上公交</div></div>
+    <div class="top">
+      <div class="htxt">
+        <h1>玉林实时公交</h1>
+        <div class="sub">实时到站 · 数据来自车来了、掌上公交</div>
+      </div>
+      <div class="srcpill"><i></i>玉林</div>
+    </div>
     <div class="searchbox">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
       <input id="q" type="search" placeholder="搜索线路、起终点…" autocomplete="off" aria-label="搜索线路">
     </div>
-    <div class="listwrap"><ul class="lines" id="lines"><li class="note">加载中…</li></ul></div>
+    <div class="listwrap">
+      <section id="favSec" hidden>
+        <div class="sec"><b>收藏</b><span id="favCnt"></span></div>
+        <div class="favrow" id="favRow"></div>
+      </section>
+      <div class="sec" id="allSec"><b>全部线路</b><span id="allCnt"></span></div>
+      <ul class="lines" id="lines"><li class="note">加载中…</li></ul>
+    </div>
     <div class="sig"><span class="pulse"></span><span id="navUpd">加载中…</span></div>
   </section>
 
@@ -436,13 +568,13 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
       <button class="side" id="btnBack" type="button" aria-label="返回线路列表">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>
       </button>
-      <h1 id="dTitle">—</h1>
+      <div class="htxt"><h1 id="dTitle">—</h1><div class="sub" id="dSub"></div></div>
       <div class="acts" id="topActs"></div>
       <span class="side"></span>
     </div>
 
     <div class="body">
-      <div class="lhead">
+      <div class="hcard">
         <div class="dirs2">
           <span id="dFrom">—</span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
@@ -459,27 +591,26 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99zM21 9l-3.99-4v3H10v2h7.01v3z"/></svg>
           反方向站点
         </button>
-        <button id="btnBuses" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm0-6c-.83 0-1.5.67-1.5 1.5S3.17 7.5 4 7.5 5.5 6.83 5.5 6 4.83 4.5 4 4.5zm0 12c-.83 0-1.5.68-1.5 1.5s.68 1.5 1.5 1.5 1.5-.68 1.5-1.5-.67-1.5-1.5-1.5zM7 19h14v-2H7v2zm0-6h14v-2H7v2zm0-8v2h14V5H7z"/></svg>
+        <button id="btnBuses" type="button" class="tonal">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5s1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/></svg>
           车辆列表
         </button>
       </div>
-      <div class="railwrap"><div class="rail" id="rail"></div></div>
+
+      <div class="railhead"><b>线路全景走向</b><span id="railHint">左右滑动 · 点站看车</span></div>
+      <div class="railsurf"><div class="railwrap"><div class="rail" id="rail"></div></div></div>
       <div class="upd" id="upd">—</div>
     </div>
 
     <div class="bottom" id="bottomBar">
-      <button class="fav" id="btnFav" type="button">
+      <button class="fav" id="btnFav" type="button" title="收藏线路" aria-label="收藏线路">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>
-        <span id="favTxt">收藏路线</span>
       </button>
-      <button id="btnRefresh" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
-        刷新
-      </button>
-      <button id="btnTurn" type="button">
+      <button id="btnTurn" type="button" title="换向" aria-label="换向">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99zM21 9l-3.99-4v3H10v2h7.01v3z"/></svg>
-        换向
+      </button>
+      <button id="btnRefresh" type="button" title="刷新" aria-label="刷新">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></svg>
       </button>
     </div>
   </section>

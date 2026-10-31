@@ -77,7 +77,7 @@ def palette(seed, chroma=None, hue_shift=0.0, cap=None):
         C = min(C, cap)
     return {t: tone(t, a, b, C) for t in TONES}
 
-SEED = "#0ab84a"
+SEED = "#006c4c"
 L, sa, sb = hex_to_lab(SEED)
 Cseed = (sa * sa + sb * sb) ** .5
 import os
@@ -111,7 +111,7 @@ LIGHT = [
     ("outline", NV[50]), ("outline-variant", NV[80]),
     ("inverse-surface", N[20]), ("inverse-on-surface", N[95]), ("inverse-primary", P[80]),
     ("scrim", N[0]), ("shadow", N[0]),
-    ("route", "#0ab84a"),
+    ("route", "#16a34a"),
 ]
 DARK = [
     ("primary", P[80]), ("on-primary", P[20]), ("primary-container", P[30]),
@@ -133,7 +133,7 @@ DARK = [
     ("outline", NV[60]), ("outline-variant", NV[30]),
     ("inverse-surface", N[90]), ("inverse-on-surface", N[20]), ("inverse-primary", P[40]),
     ("scrim", N[0]), ("shadow", N[0]),
-    ("route", P[80]),
+    ("route", "#22c55e"),
 ]
 
 def block(name, rows):

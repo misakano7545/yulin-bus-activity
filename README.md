@@ -39,28 +39,46 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
 面板资源（`index.html`/`app.js`）是 `go:embed` 打进二进制的，所以前端改动同样得走这一步 ——
 只改 `internal/panel/` 下的文件不会生效。
 
-## 版面：窄屏单列，桌面端三栏
+## 界面：窄屏单列，桌面端三栏
 
-窄屏（<900px）还是原来那套：线路列表 ↔ 线路详情两页互斥，底栏放收藏/刷新/换向，走向条横排
-（`.rail{width:max-content}` —— 只写 `min-width` 的话 `display:flex` 是块级盒，轴线会跟着铺满
-容器、伸到末站之外。站少到撑不满时（广西先进专线 6 站）再 `min-width:100%` +
-`justify-content:space-between`，多出来的宽度摊进站距，右边不留空；站多到溢出时 free space 为负、
-退回左对齐照旧横滚，格宽始终 46px。桌面端（竖排）要显式收回去 —— 收回时必须用**同一条选择器**
-（`(0,2,0)` 的 `.rail:not(:empty)` 压得住 `(0,1,0)` 的 `.rail`），否则 6 行会被纵向摊开）。
+视觉照 Trackr（Android 端 Material 3 Expressive 公交应用）那套改过一轮：大色块卡片、ExtraBold
+的到站大字、绿/橙/灰三档到站语义色、底部悬浮胶囊工具栏。令牌仍在 `index.html` 顶部 —— 种子色
+`#006c4c` 走 `scripts/md3_tokens.py`（`python3 scripts/md3_tokens.py --all` 出两段 CSS，改种子色
+只改脚本里的 `SEED`，别手改那两段）；`route` 与 `--bus`/`--bus-*`/`--track-*`/`--stop-cond`
+这几组是自定义语义角色，不随种子变（跟 Trackr 的 `BusSemanticColors` 一一对应：`--bus-run` 在途、
+`--bus-arrive` 即将到站、`--bus-pass` 已过站、`--track`/`--track-off` 已行经/未行经轴线）。
+亮色下 `--bus-arrive` 用 amber-700（`#b45309`）而不是 600：34px 的到站大字要过 3:1。
 
-桌面端（≥900px）分三栏：左栏 284px 线路导航，右栏内容区再分「站点轴 1fr（≤920px）| 详情
-440px」。配套几处：
+窄屏（<900px）线路列表 ↔ 线路详情两页互斥，靠 `hidden` 切；首页顶部是「收藏」（横向卡片）+
+「全部线路」（卡片行，右侧一颗在途车数胶囊），收藏过的那几条不再重复出现在列表里（`renderLines`
+里那段过滤，搜索时不过滤）。走向条横排（`.rail{width:max-content}` —— 只写 `min-width` 的话
+`display:flex` 是块级盒，轴线会跟着铺满容器、伸到末站之外。站少到撑不满时（广西先进专线 6 站）
+再 `min-width:100%` + `justify-content:space-between`，多出来的宽度摊进站距，右边不留空；站多到
+溢出时 free space 为负、退回左对齐照旧横滚，格宽始终 46px。桌面端（竖排）要显式收回去 —— 收回时
+必须用**同一条选择器**（`(0,2,0)` 的 `.rail:not(:empty)` 压得住 `(0,1,0)` 的 `.rail`），否则 6 行
+会被纵向摊开）。
+
+轴线画成「已行经绿 / 未行经灰」两段：`--prog` 是最近一辆车在整条轴上的位置，`renderRail` 里
+**量像素**得出（窄屏短线路是 space-between、桌面端是竖排，按格宽折算都会偏），交给 CSS 的
+`linear-gradient` 色标，横排 `90deg`、竖排 `180deg`。
+
+桌面端（≥900px）两栏：左栏 320px 线路导航（带搜索、收藏、在途数），右栏内容区再分「站点轴
+1fr（≤920px）| 详情 420px」。配套几处：
 
 - `#vList` / `#vDetail` 的 `hidden` 在桌面端被 `display:flex !important` 放开 —— 窄屏那套
   两页互斥是靠 `hidden` 切的，桌面端两页同时在场上，所以要在样式里盖掉。
-- 底栏那三个动作 JS 里挪进顶栏右侧（`layoutActs()`，跟着 `matchMedia` 变），窄屏再挪回去。
-  按钮是同一批元素，监听器不用重绑。
-- 没选线路时桌面端默认打开第一条（`onHash` 里那一支）—— 左栏常驻，右栏不能空着。
-- **走向条在桌面端转竖排**：一站一行（行高 `--ch`）、站名横排、绿线改竖轴（`.rail::before`
+- 悬浮胶囊在桌面端不悬浮：那三个动作 JS 里挪进顶栏右侧的小胶囊（`layoutActs()`，跟着
+  `matchMedia` 变），窄屏再挪回浮动胶囊。按钮是同一批元素，监听器不用重绑；
+  `.bottom{display:none}` 在桌面端把空壳收掉，不用再动 `hidden`。
+- 没选线路时桌面端默认打开第一条（`onHash` 里那一支）—— 左栏常驻，右栏不能空着。**窄屏停在
+  列表页时拉宽**不走 `hashchange`，`layoutActs()` 里补了一支：宽屏且没选中就 `openLine` 第一条，
+  否则右栏会是一块空白。
+- **走向条在桌面端转竖排**：一站一行（行高 `--ch`）、站名横排、轴线改竖轴（`.rail::before`
   换成 `left` + `top/bottom` 收半行）。横排 30 站要横向滚 292px，站名竖着写最长 9 行 135px
   —— 桌面端竖向空间多得多，换成竖列表后一屏十几站、鼠标滚轮直接滚。
-- 内容区 `.body` 自己变成栅格、`overflow:hidden`，高度铺满视口：站点轴在卡内竖滚，站点卡/
-  车辆列表/跟踪页都落在右栏（不再互相顶掉整页）。
+- 内容区 `.body` 自己变成栅格、`overflow:hidden`，高度铺满视口：站点轴在柔和底卡内竖滚，
+  到站卡/车辆列表/跟踪页都落在右栏（不再互相顶掉整页）。右栏 `align-self:stretch` +
+  `overflow-y:auto`，车多（20 辆）时自己滚，不会被 `overflow:hidden` 裁掉。
 - **桌面端点站 = 站点卡 + 全部车辆**：`renderStation` 末尾 `wide.matches` 那一支直接调
   `renderBusList(box, it, true)`，不用像窄屏那样再点一次「车辆列表」。`embedded` 那支省掉
   「返回站点」（桌面端没有列表页可回）和与页面标题重复的「开往 …」。
@@ -69,11 +87,10 @@ go build -o yba ./cmd/server && systemctl restart yulin-bus-activity
   `busListOpen` 清掉，别把列表留在右栏。
 - 车徽标同样是把横排那套「段内插值」搬到竖轴：`--p` 是站间比例（1 = 正在接近的那站，
   →0 退到上一站），横排折的是 `left`、竖排折 `top` + `translateY(-50%)`，车就落在两站之间
-  该在的高度上；行尾留 76px 给它，站名不与它抢位。首站上面没有上一格，退出去会被灰卡裁掉，
-  所以首站钉死在站上（`.stn:first-child .bus`）。
-
-改动全在 `index.html` 的 `@media (min-width:900px)` 块和 `app.js` 的 `wide` / `layoutActs` /
-`renderRail` 里那一处 `scrollIntoView`，窄屏一行没动。
+  该在的高度上；行尾留 84px 给它，站名不与它抢位。首站上面没有上一格，退出去会被柔和底
+  裁掉，所以首站钉死在站上（`.stn:first-child .bus`）。
+- 那句走向条提示（`#railHint`）跟着断点换字：窄屏「左右滑动 · 点站看车」，桌面端
+  「纵向时间轴 · 点站看车」—— `renderRail` 里按 `wide` 写，别写死在 HTML 里。
 
 ## 接口
 

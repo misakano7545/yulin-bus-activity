@@ -219,6 +219,33 @@ function lineTag(r) {
   return (all.find((d) => d.desc) || {}).desc || '临时停运';
 }
 
+// 这条线（含夜班/定制）当前在途车数 —— 后台每分钟刷一遍的 count，两个方向相加。
+// 只用来在列表/收藏卡上给个规模，不代表你那一站有没有车。
+function busCount(r) {
+  return [...r.dirs, ...(r.alt ? r.alt.dirs : [])].reduce((n, d) => n + (d.count || 0), 0);
+}
+
+// 收藏卡：横向一排（Trackr 首页的 FavoriteCard）。只在没搜索时出来 —— 搜索时
+// 结果里混着收藏也找得到，不必再占一屏。
+function renderFavs(on) {
+  const row = $('#favRow');
+  row.textContent = '';
+  const list = on ? routes.filter((r) => favs.has(r.name)) : [];
+  $('#favSec').hidden = !list.length;
+  $('#favCnt').textContent = list.length ? `${list.length} 条` : '';
+  for (const r of list) {
+    const card = el('button', 'fcard');
+    card.type = 'button';
+    const top = el('div', 'fl');
+    const n = busCount(r);
+    top.append(el('b', null, r.name),
+               el('span', 'cnt' + (n ? '' : ' zero'), n ? `${n} 辆` : '无车'));
+    card.append(top, el('div', 'to', `开往 ${endName(r.dirs[0].end)}`));
+    card.addEventListener('click', () => openLine(r.name));
+    row.append(card);
+  }
+}
+
 function renderLines(filter) {
   const f = (filter || '').trim().toLowerCase();
   const ul = $('#lines');
@@ -232,19 +259,27 @@ function renderLines(filter) {
   // 排序：收藏在前；数字线路按数值 —— 上游按字符串排，读出来是 1、11、13、2。
   // 数字线路整体排在非数字（G01、动车专线…）之前，非数字之间保持上游顺序。
   hit.sort(cmpLine);
+  // 收藏已经在那排卡里了：不搜索时列表只放剩下的，免得同一条线出现两次
+  const list = f ? hit : hit.filter((r) => !favs.has(r.name));
+  renderFavs(!f);
+  $('#allSec').textContent = '';
+  $('#allSec').append(el('b', null, f ? '搜索结果' : '全部线路'),
+                      el('span', null, `${list.length} 条`));
 
-  if (!hit.length) {
-    ul.append(el('li', 'note', routes.length ? '没有匹配的线路' : '没有取到线路'));
+  if (!list.length) {
+    ul.append(el('li', 'note', hit.length && !f ? '线路都在收藏里' :
+      routes.length ? '没有匹配的线路' : '没有取到线路'));
     return;
   }
-  for (const r of hit) {
+  for (const r of list) {
     const li = el('li', r.name === current ? 'on' : null);
     const tag = lineTag(r);
     if (tag) li.classList.add('off');
     li.append(el('span', 'badge', r.name));
     li.append(el('span', 'to', `${endName(r.dirs[0].start)} → ${endName(r.dirs[0].end)}`));
     if (tag) li.append(el('span', 'tag', tag));
-    if (favs.has(r.name)) li.append(el('span', 'star', '★'));
+    const n = busCount(r);
+    li.append(el('span', 'cnt' + (n ? '' : ' zero'), n ? `${n} 辆` : '无车'));
     li.tabIndex = 0;
     li.addEventListener('click', () => openLine(r.name));
     li.addEventListener('keydown', (e) => {
@@ -357,6 +392,7 @@ function spanOf(ls, end) {
 
 function renderHead(it) {
   $('#dTitle').textContent = titleOf(current);
+  $('#dSub').textContent = `${it.stops.length} 站 · 开往 ${endName(it.dir.end)}`;
   $('#dFrom').textContent = endName(it.dir.start);
   $('#dTo').textContent = endName(it.dir.end);
   const n = dirNote(it.dir);
@@ -408,7 +444,8 @@ function upcoming(it, s) {
   return best ? { bus: best, left: s.order - best.order } : null;
 }
 
-// 站点卡：样张里那块浅底卡片 —— 站名 +「下一辆还有 N 个站，到达该站！」。
+// 站点卡：Trackr 那块「候车站」卡 —— 站名（ExtraBold）+ 第 N 站小胶囊，
+// 下面一行到站大字（还有 N 个站），再下面一行是那辆车的车牌与倒计时。
 // N = 站序 − 最近一辆没过该站的车的站序。车在「正在接近的站」上，所以差 1 就是
 // 「还有 1 个站」。纯前端算，不多打请求。
 function renderStation() {
@@ -423,7 +460,9 @@ function renderStation() {
 
   const s = it.stops.find((x) => x.order === sel.order);
   if (!s) return;
-  box.append(el('div', 'sn', s.name));
+  const row1 = el('div', 'row1');
+  row1.append(el('div', 'sn', s.name), el('span', 'ord', `第 ${s.order} 站`));
+  box.append(row1);
   // 站点标记优先用上游的（掌上公交 stationsStatus）；车来了没有这个字段，退回手记的
   // STOP_NOTES。
   const note = s.status || STOP_NOTES[s.name];
@@ -432,12 +471,14 @@ function renderStation() {
   const up = upcoming(it, s);
   const hint = el('div', 'hint');
   if (up && up.left > 0) {
-    hint.append(document.createTextNode('下一辆还有 '), el('b', 'box', String(up.left)),
-                document.createTextNode(' 个站，到达该站！'));
+    hint.append(document.createTextNode('下一辆还有 '), el('span', 'big', String(up.left)),
+                document.createTextNode(' 个站'));
   } else if (up) {
     // 车在「本站」有两种：正在接近（state=0）和已经停下（state=1），
     // 上游给的 order 都一样，只能看 state。
-    hint.textContent = up.bus.state === 1 ? '车辆已到站！' : '车辆正在进站！';
+    hint.classList.add('arrive');
+    if (up.bus.state === 1) { hint.classList.add('at'); hint.textContent = '车辆已到站！'; }
+    else hint.textContent = '车辆正在进站！';
   } else {
     hint.classList.add('mute');
     hint.textContent = (it.rt.buses || []).length ? '当前车辆均已过该站' : `当前${stateOf(it.rt)[1]}`;
@@ -448,7 +489,12 @@ function renderStation() {
   const rt = stopCache.get(`${it.dir.lineId}:${s.order}`);
   const b = rt && (rt.buses || []).filter((x) => x.order <= s.order && x.eta > 0)
     .sort((x, y) => etaKey(x) - etaKey(y))[0];
-  if (b) box.append(el('div', 'sub', `${busFull(b.fleetNo)} · ${mins(b.eta)}${b.arriveAt ? ` · ${b.arriveAt} 到` : ''}`));
+  if (b) {
+    const row = el('div', 'eta');
+    row.append(busIcon(), el('b', null, busFull(b.fleetNo)),
+               el('span', null, mins(b.eta) + (b.arriveAt ? ` · ${b.arriveAt} 到` : '')));
+    box.append(row);
+  }
   // 桌面端右栏够宽：点站就把全部车辆直接接在卡片下面，不用再点一次「车辆列表」
   if (wide.matches) { box.classList.add('follow'); renderBusList(box, it, true); }
 }
@@ -465,7 +511,7 @@ function renderFollow(box, it, fleetNo) {
 
   const b = (it.rt.buses || []).find((x) => x.fleetNo === fleetNo);
   const h = el('div', 'h');
-  h.append(el('b', null, busFull(fleetNo)), el('span', null, `开往 ${it.dir.end}`));
+  h.append(el('b', null, busFull(fleetNo)), el('span', null, `开往 ${endName(it.dir.end)}`));
   box.append(h);
   if (!b) { box.append(el('div', 'sub', '这辆车已不在线上（收班或已到终点）。')); return; }
 
@@ -538,11 +584,15 @@ function renderBusList(box, it, embedded) {
     if (b.confidence === 'low') sub.push(`未知车牌 ${b.rawId}`);
     const txt = el('div', 'vtxt');
     const top = el('div', 'vh');
-    top.append(el('b', null, busFull(b.fleetNo)), el('span', 'eta', etaTxt));
+    // 绿色 = 在途/已到站，橙色 = 即将到站（跟走向条上那套语义色一致）
+    const cls = b.eta > 0 && b.eta <= 180 ? 'eta warn' : 'eta';
+    top.append(el('b', null, busFull(b.fleetNo)), el('span', cls, etaTxt));
     txt.append(top, el('div', 'vs', sub.join(' · ')));
     const row = el('button', 'vrow' + (over ? ' pass' : ''));
     row.type = 'button';
-    row.append(busIcon(), txt);
+    const ico = el('span', 'vico');
+    ico.append(busIcon());
+    row.append(ico, txt);
     row.addEventListener('click', () => selectBus(it, b));   // 与点走向条上的车同一条路
     box.append(row);
   }
@@ -589,6 +639,25 @@ function renderRail() {
     if (on) selCell = cell;
     rail.append(cell);
   }
+  // 轴线进度：最近一辆车走到哪儿了。按它那块 chip 的实际位置量 —— 窄屏是
+  // space-between（短线路站距被摊开）、桌面端是竖排，格宽都折算不准；量像素不用分情况。
+  const lead = (it.rt.buses || []).reduce(
+    (m, b) => (!m || b.order + b.pos > m.order + m.pos ? b : m), null);
+  const cells = [...rail.children];
+  let prog = 0;
+  if (lead && cells.length > 1) {
+    const chip = cells[lead.order - 1].querySelector('.bus');
+    const c0 = cells[0].querySelector('.bx').getBoundingClientRect();
+    const c1 = cells[cells.length - 1].querySelector('.bx').getBoundingClientRect();
+    const cc = chip.getBoundingClientRect();
+    const vert = wide.matches;
+    const mid = (r) => (vert ? r.top + r.height / 2 : r.left + r.width / 2);
+    const a0 = mid(c0), a1 = mid(c1), ac = mid(cc);
+    if (a1 > a0) prog = Math.min(100, Math.max(0, (ac - a0) / (a1 - a0) * 100));
+  }
+  rail.style.setProperty('--prog', prog + '%');
+  // 窄屏横滚、桌面端转竖排 —— 那句提示跟着换，别在桌面端还写「左右滑动」
+  $('#railHint').textContent = wide.matches ? '纵向时间轴 · 点站看车' : '左右滑动 · 点站看车';
   // 只在换线路/换班次/换方向时滚一次 —— 每 10 秒刷新都滚会把用户拖的位置拽回去。
   if (railScrollPending && selCell) {
     // 窄屏走向条是横排，横向居中；桌面端它是竖列表，改成竖向居中
@@ -639,8 +708,12 @@ function toggleFav() {
 
 function renderFav() {
   const on = favs.has(current);
-  $('#btnFav').classList.toggle('on', on);
-  $('#favTxt').textContent = on ? '已收藏' : '收藏路线';
+  const btn = $('#btnFav');
+  btn.classList.toggle('on', on);
+  const label = on ? '取消收藏' : '收藏线路';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('aria-pressed', String(on));
 }
 
 function renderAll() {
@@ -730,12 +803,14 @@ async function select(name) {
   await refresh();
 }
 
-// 桌面端左栏常驻，窄屏那条底栏在宽屏没地方待 —— 三个动作挪进顶栏右侧；变窄再挪回去。
-// 按钮是同一批元素（监听器在 boot 里绑的），挪位置不重绑。
+// 桌面端左栏常驻，窄屏那颗浮动胶囊在宽屏没地方待 —— 三个动作挪进顶栏右侧的胶囊里；
+// 变窄再挪回去。按钮是同一批元素（监听器在 boot 里绑的），挪位置不重绑。
 function layoutActs() {
+  // 窄屏停在列表页时拉宽：右栏会空着 —— 桌面端默认开第一条（onHash 的默认支只在
+  // hashchange 时跑，媒体查询变了不走那条路）
+  if (wide.matches && !current && routes.length) openLine(routes[0].name);
   const to = wide.matches ? $('#topActs') : $('#bottomBar');
-  for (const id of ['#btnFav', '#btnRefresh', '#btnTurn']) to.append($(id));
-  $('#bottomBar').hidden = wide.matches;   // 搬空之后底栏要收掉（还有缩进的空文本节点，:empty 判不出来）
+  for (const id of ['#btnFav', '#btnTurn', '#btnRefresh']) to.append($(id));
   // 桌面端没有车辆列表（.cardbtns 收掉了），窄屏开着列表时拉宽要把这状态清掉
   if (wide.matches && busListOpen) { busListOpen = false; renderStation(); }
   renderAll();   // 车牌在窄屏是缩写、宽屏是全车牌 —— 跨过 900px 得重画一遍
