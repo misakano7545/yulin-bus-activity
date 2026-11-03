@@ -5,7 +5,7 @@
 | 数据面 | 车来了 H5：`https://web.chelaile.net.cn/api/` |
 | 服务方 | 车来了（`chelaile.net.cn`），玉林城市码 `cityId=440` |
 | 鉴权 | 无 token / cookie；实时接口有 MD5 入参签名 + AES 出参加密 |
-| 实测 | 2026-10-29 20:35–21:05 CST（末班车后，仍在跑的 1/11 路可对照） |
+| 实测 | 2026-10-29 20:35–21:05 CST（末班车后，仍在跑的 1/11 路可对照）；全国枚举 2026-11-03 |
 | 代码 | `internal/upstream/{client,wire,model}.go`（实现即本文档的权威） |
 | 采集器 | `scripts/chelaile.py`（Python 版同源实现，带 selftest） |
 
@@ -51,6 +51,7 @@
 | `src` | `wechat_yulingongjiao` | 实时接口**缺了会静默返假数据**，见 §2.3 |
 
 非玉林城市把 `cityId` 换掉即可（`cityLineList` 的城市码就是车来了自己的编号，不是行政区划码）。
+全国城市怎么枚举见 §12。
 
 ### 2.2 响应包裹与剥壳
 
@@ -470,3 +471,63 @@ print(detail["line"]["state"], len(detail["buses"]))
 | 故障形态 | 缺 `src` **静默假数据**（最难发现） | 缺 `Origin` 固定 47 字节网关串（一眼可见） |
 
 详细版见 `docs/掌上公交API.md`。
+
+---
+
+## 12. 全国城市枚举（2026-11-03 实测）
+
+**结论先说：可以全国抓，但车来了没有城市列表端点，城市得靠扫 `cityId` 空间枚举出来。**
+
+### 12.1 `cityId` 是内部编号，不是行政区划码
+
+| 事实 | 证据 |
+|---|---|
+| 编号与行政区划无关 | 玉林 `440`、银川 `100`、南京 `911`、深圳 `944`、重庆 `993`、青岛 `416` |
+| 有效区间 **81–1200**，1200 以上未再命中 | `1–80` 全部 `status!=00`；`1201–1599` 扫完 0 命中 |
+| **517 个 `cityId` 有目录**，合计 **73,898 个方向记录** | `docs/data/chelaile_cityid_sweep.json`（逐 id 的方向数） |
+| 规模跨度极大：110 个 ≤20 向（县级/园区线），107 个 >200 向（地级以上） | 最大 `944`=2433 向（深圳），最小 1–4 向 |
+| `src` 不校验城市归属 | `cityId=909` 配玉林的 `src` 照样返回中山 437 向 |
+| **`lineId` 前缀是电话区号**（`025-1路-1` 南京、`0755-00010-0` 深圳、`0760-001-0` 中山） | 郊县小城的前缀是**区号+县内编号**（`4121`、`5551`、`6632`…），城市身份只能靠这个或站点名推 |
+
+### 12.2 H5 bundle 自带的 53 个 cityId（官方城市表）
+
+`customer_ch5/scripts/scripts-*.js` 里内嵌了一份 `cityId+cityName+src` 表（53 个 id / 48 城），
+是官方在用的白名单，比盲扫可靠。抽 10 个：
+
+| 城市 | cityId | src |
+|---|---|---|
+| 玉林 | 440 | `wechat_yulingongjiao` |
+| 中山 | 909 | `webapp_zhongshan` |
+| 深圳（湛江条目之外的最大） | 944 | （bundle 外扫出） |
+| 南宁 | 046 | `app_chuxingnanning` |
+| 东莞 | 008 | `webapp_dongguan` |
+| 西安 | 076 | `app_xian` |
+| 重庆 | 003 | `webapp_weixin_chongqinggongjiao` |
+| 青岛 | 914 | `app_qingdaogongjiao1` |
+| 南京 | 911 | `app_nanjing` |
+| 银川 | 100 | `wechat_yinchuan` |
+
+同一城市可有多个条目（清远 4 个、贺州 2 个、宜宾 2 个）——那是**不同运营主体的入口**，
+目录可能不重叠，全量抓时都要拉。
+
+### 12.3 跨城调用：加密与签名完全复用
+
+拿中山 `cityId=909` 的 `0760-001-0` 验证：`cryptoSign`（MD5）算法不变、AES key 不变，
+解密直接出 `line.state=0`、5 辆车、37 站。**换城市不需要任何新凭据。**
+
+注意两点：
+
+- `src` 必须带（哪怕填别的城市的），否则 `state=-1`、buses 空 —— 就是 §2.3 那个静默假数据坑；
+- 拿 A 城的 `lineId` 配 B 城的 `cityId` 会拿不到 `encryptResult`，站表也不回。
+
+### 12.4 全量抓的做法
+
+1. 城市表：`docs/data/chelaile_cityid_sweep.json` 起步，或重跑 bundle 正则
+   `params:\{cityId:"(\d+)",cityName:"([^"]+)"` 提白名单，再对 81–1200 补盲扫；
+2. 每个 `cityId` 一次 `bus/cityLineList`（明文，无签名），拿到 `allLines.all` 全部方向；
+3. 实时按需拉 `encryptedLineDetail`，签名/解密照 §5.4，`cityId`/`src` 换成该城即可；
+4. 礼貌节流：扫一轮 1120 个 id 用 0.2–0.25s 间隔没有触发风控；`cityLineList` 可放心重扫，
+   `encryptedLineDetail` 没做全量压测，别拿它当目录刷。
+
+**枚举边界提醒**：81 以下与 1200 以上没验证过「将来不新增」，新城市上线会落在哪一段未知；
+盲扫脚本要留 `status!=00` 之外的异常分支（实测还有 404 形态的端点打错会直接 HTTP 404）。

@@ -10,3 +10,5 @@ __pycache__/
 # 构建产物
 /yulin-bus-activity
 /yba
+yba.prev
+yba.new
