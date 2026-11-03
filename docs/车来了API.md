@@ -491,6 +491,7 @@ print(detail["line"]["state"], len(detail["buses"]))
 | ETA | `travels[0].travelTime` 秒 | `busToStationTime` 分钟 |
 | 状态 | `line.state` `0/-1/-2/-3` | `runState`/`hasReal` → 映射 |
 | 故障形态 | 缺 `src` **静默假数据**（最难发现） | 缺 `Origin` 固定 47 字节网关串（一眼可见） |
+| 真地铁线 | **没有**，`cityLineList` 全是公交；`line.isSubway` 恒假，地铁快巴/接驳专线不算 | **有**（`地铁10号线`/`轨道交通1号线`），`103` 给站表，`104` 恒 `hasReal=0` |
 
 详细版见 `docs/掌上公交API.md`。
 
