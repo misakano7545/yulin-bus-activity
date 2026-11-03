@@ -8,8 +8,10 @@
 
 关键点（实测）：
   * 所有 /api 请求必须带 s=h5，否则返回空。
-  * 实时车辆必须带 src=<渠道>，本例 src=wechat_yulingongjiao；
+  * 实时车辆必须带 src=<渠道>，通用值是 src=app（全国各城实测均出车）。
     不带 src 时线路状态一律 -1「等待发车」、buses 恒为空。
+    城市专属渠道（wechat_*/app_*/webapp_*）只在它自己的城市有效，
+    别拿玉林的渠道去拉南宁 —— 会退化成同一份假数据。
   * encryptedLineDetail 需 cryptoSign = MD5(json(去花括号) 的 ':'->'=' ','->'&' + "qwihrnbtmj")。
   * 响应体包在 **YGKJ{...}YGKJ## 里，取 .jsonr，status=="00" 才算成功。
 """
@@ -158,8 +160,9 @@ def main():
     ap = argparse.ArgumentParser(description="车来了玉林公交 H5 采集器")
     ap.add_argument("cmd", nargs="?", default="all",
                     choices=["all", "lines", "route", "detail", "selftest"])
-    ap.add_argument("--src", default="wechat_yulingongjiao",
-                    help="渠道标识；实时数据必需，缺省为公众号渠道")
+    ap.add_argument("--src", default="app",
+                    help="渠道标识；实时数据必需。app 全国通用，"
+                         "城市专属渠道（wechat_*/app_*/webapp_*）只在本城有效")
     ap.add_argument("--out", default="data", help="输出目录")
     ap.add_argument("--line-id", help="route/detail 子命令用")
     a = ap.parse_args()

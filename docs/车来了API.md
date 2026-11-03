@@ -48,7 +48,7 @@
 | `userId` | 空 | 不带登录态 |
 | `h5Id` | 空 | 同上 |
 | `cityId` | `440` | 玉林 |
-| `src` | `wechat_yulingongjiao` | 实时接口**缺了会静默返假数据**，见 §2.3 |
+| `src` | `app`（通用）；玉林也可用 `wechat_yulingongjiao` | 实时接口**缺了会静默返假数据**，填错城市专属渠道同样静默，见 §2.3 |
 
 非玉林城市把 `cityId` 换掉即可（`cityLineList` 的城市码就是车来了自己的编号，不是行政区划码）。
 全国城市怎么枚举见 §12。
@@ -89,8 +89,27 @@ HTTP 状态码本身几乎恒为 200，业务失败只能靠 `jsonr.status` 判�
 结论：**缺 `src` 时 `buses` 恒空，`state` 退化成按时刻表硬推**（可能是 `-1` 也可能是 `-3`），
 看起来像「今天全线停运」，实际上只是少了个参数。**它不报错、不告警、HTTP 200。**
 
-**反向也成立，别急着怪 `src`**：带上 `src` 仍然是 `state=-1`/`-3` 且 `buses` 空时，
-可能是该城**根本没有实时车源**（南宁 `046` 实测，§12.5）。判据是同一时刻拿另一座城的线做对照。
+#### 填什么值：`app` 全国通用，城市专属渠道只在本城有效
+
+`src` 不是随便填个非空串就行，它要能路由到该城的实时数据源。实测（2026-11-03 19:5x，南宁 `1路`）：
+
+| `src` | 结果 |
+|---|---|
+| `app` | **`state=0`，10 辆车** ← 通用值 |
+| `ainanning` / `nanningguidaojiaotong` | `state=0`，10 辆车（bundle 里南宁自带的两个渠道） |
+| `app_chuxingnanning` | `state=-1`，0 车（南宁的第三个渠道，反而不通） |
+| `wechat_yulingongjiao`（玉林渠道） | `state=-1`，0 车 |
+| `wechat_zhongshan` / `wechat_hezhou` / `wechat_meizhougongjiao` 等其它城渠道 | 全部 `state=-1`，0 车 |
+| `wechat` / `h5` / `webapp`（无城市前缀的臆造值） | 全部 `state=-1`，0 车 |
+
+**所以：跨城一律用 `src=app`。** 玉林那样填 `wechat_yulingongjiao` 只是因为它是玉林的官方渠道，
+不代表通用——拿它去南宁就是白跑一次，还会得出「南宁没实时」的错误结论。
+
+城市专属渠道可以从 H5 bundle 里提：正则 `(\w+):\{params:\{cityId:"(\d+)",cityName:"([^"]+)"[^}]*\}[^}]*?src:"([^"]+)"`，
+兜底值是 `wechat_<key>`；bundle 里共 68 条 / 51 个 `cityId`，覆盖不全，`app` 才是覆盖面的解。
+
+**别急着怪 `src`**：`src=app` 下仍然 `state=-1`/`-3` 且 `buses` 空，多半是这条线当时确实没车
+（`-1` 等待发车、`-3` 已收班），换个线名再试；全线皆空才该怀疑该城没接实时源。
 
 ---
 
@@ -145,7 +164,7 @@ cryptoSign({"lineId":"775200849296"}) == 3f2031d13050245b1d39d5e90a824eca
 ### 5.1 `bus/cityLineList` — 线路目录（明文）
 
 ```
-GET /api/bus/cityLineList?s=h5&v=9.1.2&vc=1&sign=1&userId=&h5Id=&cityId=440&src=wechat_yulingongjiao
+GET /api/bus/cityLineList?s=h5&v=9.1.2&vc=1&sign=1&userId=&h5Id=&cityId=440&src=app
 ```
 
 响应 `data.allLines.all[]`，实测 46 条（23 线 × 2 方向）：
@@ -358,7 +377,7 @@ GET /api/bus/line!encryptedLineDetail.action?...公共参数...
 | 现象 | 真实原因 | 处理 |
 |---|---|---|
 | HTTP 200、body 为空 | 缺 `s=h5` | 加上；空 body 一律当参数错误，不是网络问题 |
-| 全线「等待发车」、`buses` 全空 | 缺 `src` | 加上 §2.1 里那个渠道串 |
+| 全线「等待发车」、`buses` 全空 | 缺 `src`，或 `src` 不是该城的有效渠道 | 统一填 `app`；跨城别沿用别城的 `wechat_*`（§2.3） |
 | 车标飘到海里 / 偏移约 500m | 把 `stations[].lat/lng`（bd）当 WGS 用了 | 车标插值只用 `wgsLat/wgsLng`；折线画图才用 bd |
 | 明文站表里 `wgsLat=0` | `lineRoute` 本来就不给 WGS | 要 WGS 必须走 `encryptedLineDetail` |
 | 签名算错也能通 | 上游当前未校验 `cryptoSign` | 照算、别依赖「不校验」 |
@@ -392,7 +411,7 @@ GET /api/bus/line!encryptedLineDetail.action?...公共参数...
 ```sh
 UA='Mozilla/5.0 (Linux; Android 13) Mobile MicroMessenger/8.0'
 REF='Referer: https://web.chelaile.net.cn/customer_ch5/'
-BASE='s=h5&v=9.1.2&vc=1&sign=1&userId=&h5Id=&cityId=440&src=wechat_yulingongjiao'
+BASE='s=h5&v=9.1.2&vc=1&sign=1&userId=&h5Id=&cityId=440&src=app'
 
 # 目录（明文）
 curl -s -A "$UA" -H "$REF" \
@@ -429,7 +448,7 @@ def sign(d):
 
 def call(handler, **extra):
     p = {"s": "h5", "v": "9.1.2", "vc": 1, "sign": "1", "userId": "", "h5Id": "",
-         "cityId": "440", "src": "wechat_yulingongjiao", **extra}
+         "cityId": "440", "src": "app", **extra}
     url = "https://web.chelaile.net.cn/api/" + handler + "?" + urllib.parse.urlencode(p)
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Referer": REF})
     txt = urllib.request.urlopen(req, timeout=25).read().decode()
@@ -489,7 +508,7 @@ print(detail["line"]["state"], len(detail["buses"]))
 | 三段有效：三位零填充 `001–099`（81 个）、数字 `100–1200`（517 个）、5 位 `11001–11074`（73 个） |
 | **671 个 `cityId` 有目录**，合计 **155,390 个方向记录** | `docs/data/chelaile_cityid_sweep.json`（逐 id 的方向数） |
 | 规模跨度极大：最大 `085`=3389 向（香港），百位数 <20 向的县级/园区入口一大把 |
-| `src` 不校验城市归属 | `cityId=909` 配玉林的 `src` 照样返回中山 437 向 |
+| 目录接口不校验 `src` 归属，实时接口校验 | `cityId=909` 配玉林的 `src` 照样返回中山 437 向（`cityLineList`）；但 `encryptedLineDetail` 换错城就 `state=-1` 无车（§2.3） |
 | **cityId 必须按原文传**：`010` 不能写成 `10`（`10` 被拒） | 最初按 `1–80` 纯数字扫全部被拒，零填充后 81 个命中 —— 见 §13.5 |
 | **`lineId` 前缀是电话区号**（`025-1路-1` 南京、`0755-00010-0` 深圳、`0760-001-0` 中山） | 郊县小城的前缀是**区号+县内编号**（`4121`、`5551`、`6632`…），城市身份只能靠这个或站点名推 |
 
@@ -524,7 +543,8 @@ bundle 只覆盖 53 个入口，其余 618 个 `cityId`（含三段 id 空间）
 
 注意两点：
 
-- `src` 必须带（哪怕填别的城市的），否则 `state=-1`、buses 空 —— 就是 §2.3 那个静默假数据坑；
+- `src` 必须带，且要用能路由到该城的渠道：**跨城统一用 `src=app`**（§2.3）。
+  玉林的 `wechat_yulingongjiao` 在南宁不出数据，不是「随便填一个就行」；
 - 拿 A 城的 `lineId` 配 B 城的 `cityId` 会拿不到 `encryptResult`，站表也不回。
 
 ### 12.4 全量抓的做法
@@ -532,14 +552,14 @@ bundle 只覆盖 53 个入口，其余 618 个 `cityId`（含三段 id 空间）
 1. 城市表：`docs/data/chelaile_city_translation.json`（含全部三段 id）起步，或重跑 bundle 正则
    `params:\{cityId:"(\d+)",cityName:"([^"]+)"` 提白名单，再对 81–1200 补盲扫；
 2. 每个 `cityId` 一次 `bus/cityLineList`（明文，无签名），拿到 `allLines.all` 全部方向；
-3. 实时按需拉 `encryptedLineDetail`，签名/解密照 §5.4，`cityId`/`src` 换成该城即可；
+3. 实时按需拉 `encryptedLineDetail`，签名/解密照 §5.4，只换 `cityId`，`src` 保持 `app`（§2.3）；
 4. 礼貌节流：扫约 1500 个 id 用 0.2–0.25s 间隔没有触发风控；`cityLineList` 可放心重扫，
    `encryptedLineDetail` 没做全量压测，别拿它当目录刷。
 
 **枚举边界提醒**：5 位段只验证到 `11074`（11075–11199 与 11200+ 抽样 0 命中），新城市上线会落在哪一段未知；
 盲扫脚本要留 `status!=00` 之外的异常分支（实测还有 404 形态的端点打错会直接 HTTP 404）。
 
-### 12.5 跨城验证：南宁——静态可抓，实时没有车源
+### 12.5 跨城验证：南宁——静态与实时都通（`src` 填对就行）
 
 南宁在平台上拆成三个 `cityId`，三个都能拉目录：
 
@@ -549,29 +569,21 @@ bundle 只覆盖 53 个入口，其余 618 个 `cityId`（含三段 id 空间）
 | `11047` | 100 | 200 | 定制公交（`D10`/`D100`/`D205`…），`lineId` 前缀 `0771` |
 | `11069` | 81 | 162 | `046` 的子集，`lineId` 与 `046` 逐个相同，`realCityId` 也回 `046` |
 
-**静态面完全可用**：`lineRoute` 给 35 站 + 451 个折线点（`1路`，`中泰桂雅路口` ↔ `亭江白沙路口`），
+**静态面**：`lineRoute` 给 35 站 + 451 个折线点（`1路`，`中泰桂雅路口` ↔ `亭江白沙路口`），
 `2`/`5`/`6`/`8`/`9` 路同样是 15–35 站、249–417 个折线点，站点 `sId` 前缀 `0771-`。
 
-**实时面没有数据**：`encryptedLineDetail` 按目录顺序抽前 24 个线路名（`1`/`100`/`102`/`105`/`106`…），
-`line.state` 全落在 `-1`（17 条「等待发车」）与 `-3`（7 条「末班已过」，晚高峰 19:40 判末班已过显然不对），`buses` 一条都空。
+**实时面**（`src=app`，2026-11-03 19:5x）：`1路` `state=0`、**10 辆车**（`桂AR8862`/`桂AP9158`/`桂A09927D` 等）。
+按目录顺序抽 30 个线路名：`state=0` 23 条、`-3` 6 条、`-1` 1 条，累计 63 辆车次。
 
-排除 `src` 的可能性（这是 §2.3 的默认怀疑对象）：
+⚠️ **这里踩过一次坑，记下来**：用玉林的 `src=wechat_yulingongjiao` 去拉南宁，
+24 条线全部 `state=-1`/`-3`、`buses` 空，我据此写下「南宁没有实时车源」——**是错的**。
+真相是 `src` 必须能路由到该城（§2.3）。同一时刻换成 `app` 立刻出 10 辆车。
+教训：**跨城结论不能建立在单城 `src` 上**，怀疑「某城没实时」之前先换 `src=app` 复测。
 
-| `src` | 南宁 `1路` 结果 |
-|---|---|
-| `wechat_yulingongjiao`（玉林在用的那个） | `state=-1`，0 车 |
-| 空 | `state=-1`，0 车 |
-| `wechat_nanninggongjiao` / `nanninggongjiao` / `wechat_nanningbus` / `nanning` / `nnbus` / `app_nanning` 等 8 个变体 | 全部 `state=-1`，0 车 |
-| 同一时刻玉林 `1路`（`cityId=440`，同一 `src`） | **`state=0`，1 车** |
+`s=android` 会返回非 UTF-8 的二进制包、`s=ios` 不给 `encryptResult`，别试；`s=h5` 才是这条明文+加密链路。
 
-结论：**`src` 不是决定因素，南宁侧就是没有接实时车源**——`046` 只提供静态线路数据。
-这与「有 `cityId` 就有实时」的直觉相反，与 §13 表里的方向数无关（`046` 有 1034 个方向，量不小）。
-
-⚠️ 反证实验顺带确认了 §12.3 那条边界：把玉林 `lineId` 配南宁 `cityId` 请求，
-返回 `status=0002 异常信息，请重试`（连 `encryptResult` 都不给），
+⚠️ 另一条边界：把玉林 `lineId` 配南宁 `cityId` 请求，返回 `status=0002 异常信息，请重试`，
 **`lineId` 与 `cityId` 必须配对**，`lineRoute` 的宽松不适用于加密端点。
-
-**要点**：判断某城「能不能实时」，不能只看目录条数，得真拉一条 `encryptedLineDetail` 看 `line.state`。
 
 ---
 
