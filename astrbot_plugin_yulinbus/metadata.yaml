@@ -1,0 +1,5 @@
+name: astrbot_plugin_yulinbus
+description: 玉林公交实时查询，问「玉林 G02 路有没有车」直接回车辆位置
+version: 1.0.0
+author: MisakaNo
+repo: https://github.com/misakano7545/yulin-bus-activity
