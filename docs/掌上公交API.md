@@ -591,7 +591,7 @@ CMD=104&CITYNAME=玉林市&CITYCODE=450900&LINENAME=1路&DIRECTION=1&STATIONORDE
 | `stationName` / `station_lat` / `station_lng` | — | 正在接近的那一站 |
 | `statusType` | string | **`"0"` = 已到站**（官方包：到站车辆直接归属最近站）；其余为在途。其余取值语义未确认，别按含义写死 |
 | `_recTime` | number | 上报时刻，**13 位毫秒** |
-| `busToStationNiheDistance` | number | 到最近拟合点的距离（米）→ 配合 `nihePointIndex` 可把车画在轨迹线上 |
+| `busToStationNiheDistance` | number | **车到 `stationName` 那一站的剩余距离（米，沿路）**，不是相邻两站的站间距——同一条线上每辆车各报各的，随车开动变小。实测：车 (22.608687,110.157282) 到禾力塘 (22.610590,110.157149) 直线 212 米、本字段 219.83 米；而玉林9路 平安堂药业→禾力塘 317 米、禾力塘→新民城站路口 371 米。配合 `nihePointIndex` 也能把车画在轨迹线上 |
 | `nihePointIndex` | number | 在 `103.nihelist` 里的下标 |
 | `angle` | number | 车头方向角（度） |
 | `crowdStatus` / `personNumOnBus` | string | 拥挤度 / 车上人数，实测**恒为空** |
