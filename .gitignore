@@ -7,6 +7,9 @@ route.json
 ref/
 __pycache__/
 
+# 公交插件已独立成仓 astrbot_plugin_bus_activity，本仓不再收
+/astrbot_plugin_yulinbus/
+
 # 构建产物
 /yulin-bus-activity
 /yba
