@@ -93,10 +93,16 @@ const busFull = (no) => (isPlate(no) ? no : `${no} 号车`);
 const coreName = (n) => n.replace(/[（(][^）)]*[）)]/g, '').trim();
 
 // 运营状态：上游 state 0 正常 / -1 等待发车 / -2 临时停运 / -3 末班已过
-function stateOf(rt) {
+// 刚开通的线（万达广场夜游定制专线）上游在首班前也报 -2 +「暂无车辆时间」，
+// 那不是停运：带了首末班就按运营窗口说「未到首班」。
+function stateOf(rt, dir) {
   if (!rt) return ['idle', '—'];
   if (rt.state === 0) return ['run', rt.buses.length ? '运营中' : '暂无车辆'];
   if (rt.state === -1) return ['idle', '等待发车'];
+  if (rt.state === -2 && dir && dir.firstTime && dir.lastTime) {
+    if (nowMin() < hm(dir.firstTime)) return ['idle', `未到首班（${dir.firstTime} 首班）`];
+    if (nowMin() > hm(dir.lastTime)) return ['off', '末班已过'];
+  }
   if (rt.state === -2) return ['off', '临时停运'];
   if (rt.state === -3) return ['off', '末班已过'];
   return ['idle', rt.desc || `状态 ${rt.state}`];
@@ -418,7 +424,7 @@ function renderTags(it) {
     b.addEventListener('click', () => { shiftTouched = true; setShift(altOn ? 'day' : 'alt'); });
     box.append(b);
   }
-  const [cls, txt] = stateOf(it.rt);
+  const [cls, txt] = stateOf(it.rt, it.dir);
   if (cls === 'idle' || cls === 'off') box.append(el('span', 'tg ' + cls, txt));
 }
 
@@ -432,7 +438,7 @@ function renderCount(it) {
                document.createTextNode(' 辆车在行驶'));
     return;
   }
-  box.textContent = `当前${stateOf(it.rt)[1]}`;
+  box.textContent = `当前${stateOf(it.rt, it.dir)[1]}`;
 }
 
 // 最近一辆还没过该站的车，以及它离该站还有几站。
@@ -482,7 +488,7 @@ function renderStation() {
     else hint.textContent = '车辆正在进站！';
   } else {
     hint.classList.add('mute');
-    hint.textContent = (it.rt.buses || []).length ? '当前车辆均已过该站' : `当前${stateOf(it.rt)[1]}`;
+    hint.textContent = (it.rt.buses || []).length ? '当前车辆均已过该站' : `当前${stateOf(it.rt, it.dir)[1]}`;
   }
   box.append(hint);
 
@@ -561,7 +567,7 @@ function renderBusList(box, it, embedded) {
   if (!embedded) box.append(el('div', 'sub', `开往 ${it.dir.end}`));
   if (!rt) { box.append(el('div', 'sub', '读取到站时间…')); return; }
   const bs = (rt.buses || []).slice();
-  if (!bs.length) { box.append(el('div', 'sub', `当前${stateOf(rt)[1]}。`)); return; }
+  if (!bs.length) { box.append(el('div', 'sub', `当前${stateOf(rt, it.dir)[1]}。`)); return; }
 
   // 「已到站」是它停在自己那站（order），不是停在你正看的这站 —— 掌上公交每站只回最近
   // 2 辆车的预测，窗口外又在别站停着的车没有 ETA，只看 state 会把它写成「已到站」。
